@@ -27,51 +27,48 @@ class ANITA:
         }
 
     def orchestrate(self, traveler_type="general", preferences=None):
-        results = {}
+    results = {}
 
-        # Step 1: Run core agents
-        for name in ["hotel", "food", "tour", "flight", "weather", "news"]:
-            if self.state_manager.route(name):
-                output = self.agents[name].run(self.state_manager.state)
-                self.state_manager.update(name, output)
-                results[name] = output
+    # Step 1: Run core agents
+    for name in ["hotel", "food", "tour", "flight", "weather", "news"]:
+        if self.state_manager.route(name, self.routes):
+            output = self.agents[name].run(self.state_manager.state)
+            self.state_manager.update(name, output)
+            results[name] = output
 
-                # Weather disruption → rerun TourAgent
-                if name == "weather" and "advisories" in output.get("weather", {}):
-                    if "storm" in output["weather"]["advisories"].lower():
-                        alt_tours = self.agents["tour"].run(self.state_manager.state)
-                        self.state_manager.update("tour", alt_tours)
-                        results["tour"] = alt_tours
+    # Step 2: Assess impact
+    impact_report = self.agents["impact"].assess(results, traveler_type, preferences)
+    results["impact_assessment"] = impact_report.dict()
 
-        # Step 2: Assess impact
-        impact_report = self.agents["impact"].assess(results, traveler_type, preferences)
-        results["impact_assessment"] = impact_report.dict()
+    # Step 3: Build narrative
+    narrative = []
+    if impact_report.budget["flag"] == "Expensive":
+        narrative.append("Your hotel choice looks expensive, so I’ve pulled budget alternatives.")
+    if impact_report.accessibility.get("wheelchair_friendly_hotels"):
+        narrative.append("Accessibility is flagged — I’ve added wheelchair‑friendly hotel and tour options.")
+    if impact_report.risk["risk_level"] == "High":
+        narrative.append("Risk level is high — I suggest safer transport routes or daytime flights.")
+    if impact_report.sustainability["carbon_score"] == "High":
+        narrative.append("This itinerary has a high carbon footprint — eco‑friendly hotels and metro transport are available.")
 
-        # Step 3: Wrap structured ImpactReport into conversational explanation
-        narrative = []
-        if impact_report.budget["flag"] == "Expensive":
-            narrative.append("Your hotel choice looks expensive, so I’ve pulled budget alternatives.")
-        if impact_report.accessibility.get("wheelchair_friendly_hotels"):
-            narrative.append("Accessibility is flagged — I’ve added wheelchair‑friendly hotel and tour options.")
-        if impact_report.risk["risk_level"] == "High":
-            narrative.append("Risk level is high — I suggest safer transport routes or daytime flights.")
-        if impact_report.sustainability["carbon_score"] == "High":
-            narrative.append("This itinerary has a high carbon footprint — eco‑friendly hotels and metro transport are available.")
-        
-        results["impact_narrative"] = " ".join(narrative) if narrative else "Your itinerary looks balanced and well‑suited."
+    results["impact_narrative"] = " ".join(narrative) if narrative else "Your itinerary looks balanced and well‑suited."
 
-        # Step 4: Generate alternates based on impact findings
-        alternates = {}
-        if "hotel" in impact_report.alternates:
-            alternates["hotels"] = self.agents["hotel"].run({**self.state_manager.state, "constraint": "budget"})
-        if "transport" in impact_report.alternates:
-            alternates["transport"] = self.agents["flight"].run({**self.state_manager.state, "constraint": "safe"})
-        if "tour" in impact_report.alternates:
-            alternates["tours"] = self.agents["tour"].run({**self.state_manager.state, "constraint": "accessible"})
-        
-        results["alternate_options"] = alternates
+    # Step 4: Apply alternates into state
+    alternates = self.routes.alternate_routes(impact_report.dict(), self.state_manager.state)
+    self.state_manager.apply_alternates(alternates)
 
-        return results
+    # Step 5: Re‑query agents with constraints
+    alternate_outputs = {}
+    for agent_name, constraint in alternates.items():
+        alt_output = self.agents[agent_name].run(
+            {**self.state_manager.state, "constraint": constraint}
+        )
+        alternate_outputs[agent_name] = alt_output
+        self.state_manager.update(f"{agent_name}_alternates", alt_output)
+
+    results["alternate_options"] = alternate_outputs
+
+    return results
 
 
     
