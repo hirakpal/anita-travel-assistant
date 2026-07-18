@@ -18,36 +18,11 @@ class TourAgent:
         self.name = name
         self.mode = mode
         self.provider = provider
-        self.prompt_tours = """
-        You are the Tour Agent.
-        Task: Suggest 2–3 tours based on destination and traveler profile.
-        Include: name, type, duration, price range, reviews, fit.
-        Return strictly in JSON format.
-        """
-        self.prompt_alerts = """
-        You are the Alert SubAgent.
-        Task: Provide travel advisories (weather, strikes, health alerts).
-        Include: type, message, severity.
-        Return strictly in JSON format.
-        """
-        self.prompt_events = """
-        You are the Event SubAgent.
-        Task: Suggest local events (festivals, concerts, exhibitions).
-        Include: name, date, location, description, price range, reviews.
-        Return strictly in JSON format.
-        """
-        self.prompt_locations = """
-        You are the Location SubAgent.
-        Task: Recommend attractions/landmarks.
-        Include: name, type, opening_hours, price_range, reviews.
-        Return strictly in JSON format.
-        """
-        self.prompt_news = """
-        You are the News SubAgent.
-        Task: Provide local travel-relevant news.
-        Include: headline, source, date, summary.
-        Return strictly in JSON format.
-        """
+        self.prompt_tours = TOUR_PROMPT
+        self.prompt_alerts = ALERTS_PROMPT
+        self.prompt_events = EVENTS_PROMPT
+        self.prompt_locations = LOCATIONS_PROMPT
+        self.prompt_news = NEWS_PROMPT
 
     def _call_gemini(self, prompt, destination):
         api_key = os.getenv("GOOGLE_API_KEY")
