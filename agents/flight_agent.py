@@ -3,6 +3,7 @@ import os
 import requests
 from rag.youtube_rag import query_videos, summarize_results
 from prompts.flight_prompt import FLIGHT_PROMPT
+from utils.parsers import parse_flights_output
 
 # Helper functions (can be moved to utils.py)
 CITY_TO_IATA = {
@@ -56,7 +57,7 @@ class FlightAgent:
     def run(self, state):
         if not all(k in state for k in ["origin", "destination", "arrival_time", "departure_time"]):
             return {"error": "Origin, destination, arrival, or departure time missing"}
-
+        
         constraint = state.get("constraint")
 
         # Demo mode → stubbed flights only
@@ -73,39 +74,33 @@ class FlightAgent:
             return state
 
         try:
-            # Online mode → Gemini call with prompt + constraint
-            flights_text = self._call_gemini(
-                self.prompt,
-                state["origin"],
-                state["destination"],
-                constraint
-            )
+        # Online mode → Gemini call with prompt + constraint
+        flights_text = self._call_gemini(
+            self.prompt,
+            state["origin"],
+            state["destination"],
+            constraint
+        )
 
-            # For now, assume Gemini returns JSON directly
-            # You can add a parser here if needed
-            try:
-                import json
-                flights = json.loads(flights_text)
-            except Exception:
-                flights = [{"raw_output": flights_text}]
+        # Parse Gemini output into structured flights
+        flights = parse_flights_output(flights_text)
+        state["flights"] = flights
 
-            state["flights"] = flights
+        # Enrich with AviationStack API
+        state = self._enrich_with_api(state)
 
-            # Enrich with AviationStack API
-            state = self._enrich_with_api(state)
+        # Append vlog insights via RAG
+        rag_results = query_videos(state["destination"], ["flights"], mode=self.mode)
+        state["vlog_insights"] = summarize_results(rag_results, mode=self.mode)
 
-            # Append vlog insights via RAG
-            rag_results = query_videos(state["destination"], ["flights"], mode=self.mode)
-            state["vlog_insights"] = summarize_results(rag_results, mode=self.mode)
+        return state
 
-            return state
-
-        except Exception as e:
-            return {
-                "flights": [],
-                "vlog_insights": [],
-                "error": f"Unable to fetch flight data: {e}"
-            }
+    except Exception as e:
+        return {
+            "flights": [],
+            "vlog_insights": [],
+            "error": f"Unable to fetch flight data: {e}"
+        }
 
     def _enrich_with_api(self, state):
         api_key = os.getenv("AVIATIONSTACK_API_KEY")
