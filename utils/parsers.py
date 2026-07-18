@@ -1,4 +1,5 @@
 import re
+from utils.models import Alert, Event, Location, News
 
 def parse_booking_output(raw_text: str):
     """
@@ -228,5 +229,63 @@ def parse_transport_output(raw_text: str):
                 print(f"⚠️ Transport parse error: {e!r}")
 
     return transports
+
+
+
+def parse_alerts_output(raw_text: str) -> List[dict]:
+    alerts = []
+    chunks = raw_text.split("\n")
+    for chunk in chunks:
+        if not chunk.strip():
+            continue
+        parsed = {"type": "General", "message": chunk.strip(), "severity": None}
+        try:
+            alert = Alert(**parsed)
+            alerts.append(alert.dict())
+        except Exception as e:
+            print(f"⚠️ Alert parse error: {e!r}")
+    return alerts
+
+def parse_events_output(raw_text: str) -> List[dict]:
+    events = []
+    chunks = raw_text.split("\n\n")
+    for chunk in chunks:
+        if not chunk.strip():
+            continue
+        parsed = {"name": chunk.split("\n")[0], "date": None, "location": None, "description": chunk}
+        try:
+            event = Event(**parsed)
+            events.append(event.dict())
+        except Exception as e:
+            print(f"⚠️ Event parse error: {e!r}")
+    return events
+
+def parse_locations_output(raw_text: str) -> List[dict]:
+    locations = []
+    chunks = raw_text.split("\n\n")
+    for chunk in chunks:
+        if not chunk.strip():
+            continue
+        parsed = {"name": chunk.split("\n")[0], "type": "Landmark", "opening_hours": None, "price_range": None}
+        try:
+            location = Location(**parsed)
+            locations.append(location.dict())
+        except Exception as e:
+            print(f"⚠️ Location parse error: {e!r}")
+    return locations
+
+def parse_news_output(raw_text: str) -> List[dict]:
+    news_items = []
+    chunks = raw_text.split("\n\n")
+    for chunk in chunks:
+        if not chunk.strip():
+            continue
+        parsed = {"headline": chunk.split("\n")[0], "source": None, "date": None, "summary": chunk}
+        try:
+            news = News(**parsed)
+            news_items.append(news.dict())
+        except Exception as e:
+            print(f"⚠️ News parse error: {e!r}")
+    return news_items
 
 
