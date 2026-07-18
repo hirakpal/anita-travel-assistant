@@ -7,6 +7,11 @@ from utils.parsers import (
     parse_locations_output,
     parse_news_output
 )
+from prompts.tour_prompt import TOUR_PROMPT
+from prompts.alerts_prompt import ALERTS_PROMPT
+from prompts.events_prompt import EVENTS_PROMPT
+from prompts.locations_prompt import LOCATIONS_PROMPT
+from prompts.news_prompt import NEWS_PROMPT
 
 class TourAgent:
     def __init__(self, name="TourAgent", mode="Online", provider="gemini"):
