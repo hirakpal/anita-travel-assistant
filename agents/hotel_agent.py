@@ -11,6 +11,7 @@ class HotelAgent:
         - Amenities (WiFi, pool, gym, breakfast, etc.)
         - Parking availability (on-site, valet, free/paid)
         - Approximate price range
+        - Guest reviews (summary of ratings and highlights)
         - Why it fits the user’s profile (budget, family, luxury).
         If no destination is provided, return an error message.
         """
@@ -29,6 +30,14 @@ class HotelAgent:
                     "amenities": ["Free WiFi", "Pool", "Gym", "Breakfast included"],
                     "parking": "Free on-site parking",
                     "price_range": "$120–$150 per night",
+                    "reviews": {
+                        "rating": 4.5,
+                        "highlights": [
+                            "Guests loved the central location",
+                            "Breakfast buffet highly rated",
+                            "Rooms spacious and clean"
+                        ]
+                    },
                     "fit": "Good for mid-range couples"
                 },
                 {
@@ -38,9 +47,15 @@ class HotelAgent:
                     "amenities": ["WiFi", "Breakfast optional"],
                     "parking": "Paid parking available",
                     "price_range": "$50–$70 per night",
+                    "reviews": {
+                        "rating": 3.8,
+                        "highlights": [
+                            "Affordable and convenient for short stays",
+                            "Staff friendly and helpful",
+                            "Rooms basic but clean"
+                        ]
+                    },
                     "fit": "Best for budget travelers"
                 }
             ]
         }
-
-
