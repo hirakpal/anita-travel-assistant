@@ -120,3 +120,4 @@ with tab_alerts:
     else:
         st.warning("🌦️ Rain forecast detected → Suggest indoor museum instead of outdoor walk.")
         st.warning("🚧 Road closure detected → Suggest alternate transport route.")
+
