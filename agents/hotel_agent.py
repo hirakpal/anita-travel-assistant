@@ -2,7 +2,7 @@
 import os
 import requests
 import youtube_rag
-from prompts.flight_prompt import HOTEL_PROMPT
+from prompts.hotel_prompt import HOTEL_PROMPT
 class HotelAgent:
     def __init__(self, name="HotelAgent", mode="Online", provider="gemini"):
         self.name = name
