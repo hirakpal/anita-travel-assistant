@@ -16,8 +16,8 @@ class FlightAgent:
         """
 
     def run(self, state):
-        if "origin" not in state or "destination" not in state:
-            return {"error": "Origin or destination missing"}
+        if not all(k in state for k in ["origin", "destination", "arrival_time", "departure_time"]):
+            return {"error": "Origin, destination, arrival, or departure time missing"}
         
         # Stubbed example output — later you’ll replace with API calls
         return {
@@ -25,6 +25,8 @@ class FlightAgent:
                 {
                     "airline": "Air India",
                     "route": f"{state['origin']} → {state['destination']}",
+                    "departure": "12 Aug, 6:00 AM IST",
+                    "arrival": state["arrival_time"],
                     "duration": "9h 30m",
                     "class_options": ["Economy", "Business"],
                     "baggage_allowance": "25kg check-in + 7kg cabin",
@@ -37,11 +39,13 @@ class FlightAgent:
                             "Food quality praised on long-haul routes"
                         ]
                     },
-                    "fit": "Good for mid-range travelers"
+                    "fit": "Matches requested arrival window"
                 },
                 {
                     "airline": "Lufthansa",
                     "route": f"{state['origin']} → {state['destination']}",
+                    "departure": state["departure_time"],
+                    "arrival": "18 Aug, 11:30 PM IST",
                     "duration": "10h 15m",
                     "class_options": ["Economy", "Premium Economy", "Business"],
                     "baggage_allowance": "23kg check-in + 8kg cabin",
@@ -54,7 +58,7 @@ class FlightAgent:
                             "Smooth connections at Frankfurt hub"
                         ]
                     },
-                    "fit": "Best for comfort-focused travelers"
+                    "fit": "Matches requested arrival window"
                 }
             ]
         }
