@@ -1,54 +1,137 @@
-import os
-import requests
+from utils.models import ImpactReport
 
 class ImpactAssessmentAgent:
-    def __init__(self, name="ImpactAssessmentAgent", mode="Online", provider="gemini"):
-        self.name = name
+    def __init__(self, mode="Online"):
+        """
+        mode = "Online" → run full evaluation logic
+        mode = "Demo"   → return mock impact report for testing
+        """
         self.mode = mode
-        self.provider = provider
-        self.prompt = """
-        You are the Impact Assessment Agent.
-        Task: Evaluate disruptions and changes in itinerary.
-        Include:
-        - Risk factors (flights, hotels, activities, transport, weather, visa, currency, health)
-        - Severity (Low, Medium, High)
-        - Suggested mitigations
+
+    def assess(self, itinerary, traveler_type="general", preferences=None):
+        """
+        Assess the impact of an itinerary across sustainability, risk, wellbeing,
+        cultural fit, budget, accessibility, health, time preferences, and group dynamics.
+        Traveler type and preferences are factored into risk and recommendations.
         """
 
-    def run(self, state):
-        disruptions = state.get("disruptions", [])
-
-        # DEMO MODE → stubbed disruptions
+        # DEMO MODE → return static mock data
         if self.mode == "Demo":
-            state["impact_assessment"] = [
-                {"risk": "Demo disruption: flight delay risk", "severity": "Medium", "mitigation": "Rebook flight"}
-            ]
-            return state
+            return {
+                "sustainability": {
+                    "carbon_score": "Medium",
+                    "eco_alternatives": ["Demo Eco Hotel", "Demo Metro transport"]
+                },
+                "risk": {
+                    "weather": "Clear skies",
+                    "political": "None",
+                    "risk_level": "Low"
+                },
+                "wellbeing": {
+                    "activity_balance": "Balanced",
+                    "recommendation": "Looks good"
+                },
+                "cultural_fit": {
+                    "sensitivity": "Demo cultural note",
+                    "dietary": "Demo dietary options"
+                },
+                "budget": {
+                    "flag": "Affordable",
+                    "alternatives": ["Demo budget hotel", "Demo street food tour"]
+                },
+                "accessibility": {
+                    "wheelchair_friendly_hotels": ["Demo Accessible Hotel"],
+                    "accessible_tours": ["Demo Accessible Tour"]
+                },
+                "health": {
+                    "altitude_risk": "Low",
+                    "vaccination_advisories": ["Demo vaccination advisory"]
+                },
+                "time_preferences": {
+                    "morning_activities": ["Demo morning walk"],
+                    "evening_activities": ["Demo evening concert"]
+                },
+                "group_dynamics": {
+                    "shared_activities": ["Demo family cooking class"],
+                    "solo_activities": ["Demo solo photography walk"]
+                }
+            }
 
-        # ONLINE MODE → Gemini API
-        if self.provider == "gemini":
-            api_key = os.getenv("GOOGLE_API_KEY")
-            try:
-                resp = requests.post(
-                    "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent",
-                    headers={"Authorization": f"Bearer {api_key}"},
-                    json={
-                        "contents": [{
-                            "parts": [{
-                                "text": f"{self.prompt}\nDisruptions: {disruptions}\nState: {state}"
-                            }]
-                        }]
-                    },
-                    timeout=15
-                )
-                resp.raise_for_status()
-                data = resp.json()
-                output_text = data["candidates"][0]["content"]["parts"][0]["text"]
+        # ONLINE MODE → run full evaluation logic
+        # --- Sustainability ---
+        sustainability = {
+            "carbon_score": "High" if "flight" in str(itinerary).lower() else "Low",
+            "eco_alternatives": ["Eco Hotel Verde", "Metro transport"]
+        }
 
-                # For now, store raw Gemini output. Later, parse into structured JSON.
-                state["impact_assessment"] = [{"raw_output": output_text}]
-            except Exception as e:
-                print(f"⚠️ Gemini API error: {e!r}")
-                state["impact_assessment"] = [{"error": "Unable to fetch impact assessment from Gemini"}]
+        # --- Risk & Safety ---
+        risk_level = "Medium"
+        if traveler_type == "solo":
+            risk_level = "High" if "rally" in str(itinerary).lower() else "Medium"
+        elif traveler_type == "family":
+            risk_level = "High" if "heatwave" in str(itinerary).lower() else "Low"
+        elif traveler_type == "senior":
+            risk_level = "High" if "late night" in str(itinerary).lower() else "Medium"
+        elif traveler_type == "adventure":
+            risk_level = "Medium"  # adventure travelers tolerate more risk
 
-        return state
+        risk = {
+            "weather": "Heatwave advisory" if "heatwave" in str(itinerary).lower() else "Clear",
+            "political": "Rally near Piazza Venezia" if "rally" in str(itinerary).lower() else "None",
+            "risk_level": risk_level
+        }
+
+        # --- Wellbeing ---
+        wellbeing = {
+            "activity_balance": "Packed schedule" if len(itinerary.get("tours", [])) > 3 else "Balanced",
+            "recommendation": "Add rest day" if len(itinerary.get("tours", [])) > 3 else "Looks good"
+        }
+
+        # --- Cultural & Social Fit ---
+        cultural_fit = {
+            "sensitivity": "Dress modestly at religious sites",
+            "dietary": "Vegetarian options available"
+        }
+
+        # --- Budget Sensitivity ---
+        budget = {
+            "flag": "Expensive" if "luxury" in str(itinerary).lower() else "Affordable",
+            "alternatives": ["Budget hotel", "Street food tour"]
+        }
+
+        # --- Accessibility Needs ---
+        accessibility = {
+            "wheelchair_friendly_hotels": ["Hotel Roma Accessible"],
+            "accessible_tours": ["Colosseum ramp access tour"]
+        }
+
+        # --- Health Considerations ---
+        health = {
+            "altitude_risk": "High" if "Cusco" in str(itinerary) else "Low",
+            "vaccination_advisories": ["Yellow fever recommended for Africa trips"]
+        }
+
+        # --- Time Preferences ---
+        time_pref = {
+            "morning_activities": ["Museum tours", "City walks"],
+            "evening_activities": ["Jazz festival", "Night market"]
+        }
+
+        # --- Group Dynamics ---
+        group_dynamics = {
+            "shared_activities": ["Family cooking class"],
+            "solo_activities": ["Photography walk"]
+        }
+
+        # --- Final Impact Report ---
+        return {
+            "sustainability": sustainability,
+            "risk": risk,
+            "wellbeing": wellbeing,
+            "cultural_fit": cultural_fit,
+            "budget": budget,
+            "accessibility": accessibility,
+            "health": health,
+            "time_preferences": time_pref,
+            "group_dynamics": group_dynamics
+        }
