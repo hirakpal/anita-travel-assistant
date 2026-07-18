@@ -51,6 +51,12 @@ def parse_booking_output(raw_text: str):
             parsed["status"] = "Reservation confirmed"
 
         bookings.append(parsed)
+        for parsed in parsed_chunks:
+            try:
+                booking = Booking(**parsed)
+                bookings.append(booking.dict())
+            except Exception as e:
+                print(f"⚠️ Booking parse error: {e!r}")
 
     return bookings
 import re
@@ -103,7 +109,12 @@ def parse_hotels_output(raw_text: str):
             parsed["fit"] = fit_match.group(2).strip()
 
         hotels.append(parsed)
-
+        for parsed in parsed_chunks:
+            try:
+                hotel = Hotel(**parsed)
+                hotels.append(hotel.dict())
+            except Exception as e:
+                print(f"⚠️ Hotel parse error: {e!r}")
     return hotels
 
 def parse_food_output(raw_text: str):
@@ -155,6 +166,12 @@ def parse_food_output(raw_text: str):
             parsed["fit"] = fit_match.group(2).strip()
 
         restaurants.append(parsed)
+        for parsed in parsed_chunks:
+            try:
+                restaurant = Restaurant(**parsed)
+                restaurants.append(restaurant.dict())
+            except Exception as e:
+                print(f"⚠️ Restaurant parse error: {e!r}")
 
     return restaurants
 
@@ -203,6 +220,12 @@ def parse_transport_output(raw_text: str):
             parsed["fit"] = fit_match.group(2).strip()
 
         transports.append(parsed)
+        for parsed in parsed_chunks:
+            try:
+                transport = Transport(**parsed)
+                transports.append(transport.dict())
+            except Exception as e:
+                print(f"⚠️ Transport parse error: {e!r}")
 
     return transports
 
