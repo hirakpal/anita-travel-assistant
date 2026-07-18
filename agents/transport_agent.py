@@ -2,7 +2,7 @@
 import os
 import requests
 import sim_currency_rag
-
+from prompts.transport_prompt import TRANSPORT_PROMPT
 class TransportAgent:
     def __init__(self, name="TransportAgent", mode="Online", provider="gemini"):
         self.name = name
