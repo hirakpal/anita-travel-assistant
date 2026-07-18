@@ -2,9 +2,16 @@
 import os
 import requests
 from rag.youtube_rag import query_videos, summarize_results
+from prompts.flight_prompt import FLIGHT_PROMPT
 
 # Helper functions (can be moved to utils.py)
-CITY_TO_IATA = {"Mumbai": "BOM", "Bengaluru": "BLR", "Tokyo": "HND", "Singapore": "SIN", "New York": "JFK"}
+CITY_TO_IATA = {
+    "Mumbai": "BOM",
+    "Bengaluru": "BLR",
+    "Tokyo": "HND",
+    "Singapore": "SIN",
+    "New York": "JFK"
+}
 
 def _city_to_iata(city: str) -> str:
     if not city:
@@ -22,61 +29,83 @@ def _is_passenger_airline(name: str) -> bool:
     banned = ["cargo","freight","logistics","courier","express","blue dart","fedex","ups","dhl"]
     return not any(b in (name or "").lower() for b in banned)
 
+
 class FlightAgent:
-    def __init__(self, name="FlightAgent", mode="Online"):
+    def __init__(self, name="FlightAgent", mode="Online", provider="gemini"):
         self.name = name
         self.mode = mode
-        self.prompt = """You are the Flight Agent..."""
+        self.provider = provider
+        self.prompt = FLIGHT_PROMPT
+
+    def _call_gemini(self, prompt, origin, destination, constraint=None):
+        api_key = os.getenv("GOOGLE_API_KEY")
+        text = f"{prompt}\nOrigin: {origin}\nDestination: {destination}"
+        if constraint:
+            text += f"\nConstraint: {constraint}"
+
+        resp = requests.post(
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent",
+            headers={"Authorization": f"Bearer {api_key}"},
+            json={"contents": [{"parts": [{"text": text}]}]},
+            timeout=15
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        return data["candidates"][0]["content"]["parts"][0]["text"]
 
     def run(self, state):
         if not all(k in state for k in ["origin", "destination", "arrival_time", "departure_time"]):
             return {"error": "Origin, destination, arrival, or departure time missing"}
 
+        constraint = state.get("constraint")
+
         # Demo mode → stubbed flights only
         if self.mode == "Demo":
             state["flights"] = [
-                {"airline": "Demo Airlines", "route": f"{state['origin']} → {state['destination']}", "price_range": "$500"}
+                {
+                    "airline": "Demo Airlines",
+                    "route": f"{state['origin']} → {state['destination']}",
+                    "price_range": "$500",
+                    "constraint_applied": constraint or "none"
+                }
             ]
             state["vlog_insights"] = ["🎬 Demo vlog: Flight booking experience"]
             return state
 
-        # Online mode → LLM suggestions
-        flights = [
-            {
-                "airline": "Air India",
-                "route": f"{state['origin']} → {state['destination']}",
-                "departure": "12 Aug, 6:00 AM IST",
-                "arrival": state["arrival_time"],
-                "duration": "9h 30m",
-                "class_options": ["Economy", "Business"],
-                "baggage_allowance": "25kg check-in + 7kg cabin",
-                "price_range": "$450–$600",
-                "reviews": {"rating": 4.2, "highlights": ["On-time performance", "Comfortable seats", "Good food"]},
-                "fit": "Matches requested arrival window"
-            },
-            {
-                "airline": "Lufthansa",
-                "route": f"{state['origin']} → {state['destination']}",
-                "departure": state["departure_time"],
-                "arrival": "18 Aug, 11:30 PM IST",
-                "duration": "10h 15m",
-                "class_options": ["Economy", "Premium Economy", "Business"],
-                "baggage_allowance": "23kg check-in + 8kg cabin",
-                "price_range": "$550–$750",
-                "reviews": {"rating": 4.5, "highlights": ["Excellent service", "Premium Economy praised", "Smooth connections"]},
-                "fit": "Matches requested arrival window"
+        try:
+            # Online mode → Gemini call with prompt + constraint
+            flights_text = self._call_gemini(
+                self.prompt,
+                state["origin"],
+                state["destination"],
+                constraint
+            )
+
+            # For now, assume Gemini returns JSON directly
+            # You can add a parser here if needed
+            try:
+                import json
+                flights = json.loads(flights_text)
+            except Exception:
+                flights = [{"raw_output": flights_text}]
+
+            state["flights"] = flights
+
+            # Enrich with AviationStack API
+            state = self._enrich_with_api(state)
+
+            # Append vlog insights via RAG
+            rag_results = query_videos(state["destination"], ["flights"], mode=self.mode)
+            state["vlog_insights"] = summarize_results(rag_results, mode=self.mode)
+
+            return state
+
+        except Exception as e:
+            return {
+                "flights": [],
+                "vlog_insights": [],
+                "error": f"Unable to fetch flight data: {e}"
             }
-        ]
-        state["flights"] = flights
-
-        # Enrich with API
-        state = self._enrich_with_api(state)
-
-        # Append vlog insights
-        rag_results = query_videos(state["destination"], ["flights"], mode=self.mode)
-        state["vlog_insights"] = summarize_results(rag_results, mode=self.mode)
-
-        return state
 
     def _enrich_with_api(self, state):
         api_key = os.getenv("AVIATIONSTACK_API_KEY")
@@ -109,6 +138,11 @@ class FlightAgent:
                 enriched.append(f)
             state["flights"] = enriched
             return state
+
+        except Exception as e:
+            print(f"⚠️ Error calling AviationStack: {e!r}")
+            return state
+
 
         except Exception as e:
             print(f"⚠️ Error calling AviationStack: {e!r}")
