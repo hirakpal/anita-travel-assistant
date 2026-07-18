@@ -2,25 +2,13 @@
 import os
 import requests
 import youtube_rag
-
+from prompts.flight_prompt import FOOD_PROMPT
 class FoodAgent:
     def __init__(self, name="FoodAgent", mode="Online", provider="gemini"):
         self.name = name
         self.mode = mode
         self.provider = provider
-        self.prompt = """
-        You are the Food Expert Agent.
-        Task: Recommend 2–3 restaurants or food experiences based on destination and food preferences.
-        Include:
-        - Restaurant name
-        - Cuisine type
-        - Dietary options (vegetarian, vegan, gluten-free, etc.)
-        - Seating style (casual, fine dining, outdoor, family-friendly)
-        - Price range
-        - Guest reviews (rating + highlights)
-        - Why it matches the user’s preferences.
-        If no destination is provided, return an error message.
-        """
+        self.prompt = FOOD_PROMPT
 
     def run(self, state):
         if "destination" not in state:
