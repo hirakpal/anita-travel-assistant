@@ -1,6 +1,9 @@
+import youtube_rag
+
 class HotelAgent:
-    def __init__(self, name="HotelAgent"):
+    def __init__(self, name="HotelAgent", mode="Online"):
         self.name = name
+        self.mode = mode
         self.prompt = """
         You are the Hotel Agent.
         Task: Suggest 1–2 hotel options based on destination, budget tier, and traveler profile.
@@ -18,7 +21,15 @@ class HotelAgent:
         if not state.get("destination"):
             return {"error": "Destination missing"}
 
-        # Stubbed LLM suggestions
+        # Demo mode → stubbed hotels only
+        if self.mode == "Demo":
+            state["hotels"] = [
+                {"name": "Demo Hotel", "location": "City Center", "price_range": "$100"}
+            ]
+            state["vlog_insights"] = ["🎬 Demo vlog: Hotel booking highlights"]
+            return state
+
+        # Online mode → structured suggestions
         hotels = [
             {
                 "name": "ITC Rajputana Jaipur",
@@ -40,4 +51,9 @@ class HotelAgent:
             }
         ]
         state["hotels"] = hotels
+
+        # Append YouTube RAG insights
+        rag_results = youtube_rag.query_videos(state["destination"], ["hotels"], mode=self.mode)
+        state["vlog_insights"] = youtube_rag.summarize_results(rag_results, mode=self.mode)
+
         return state
