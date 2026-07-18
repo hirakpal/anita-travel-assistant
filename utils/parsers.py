@@ -3,43 +3,53 @@ import re
 def parse_booking_output(raw_text: str):
     """
     Parse Gemini free-text booking output into structured JSON.
-    Extracts confirmation, cancellation_policy, payment_options, reviews, and status.
+    Supports multiple bookings by splitting on 'Booking ID' or 'Reservation'.
     """
 
-    parsed = {
-        "confirmation": None,
-        "cancellation_policy": None,
-        "payment_options": [],
-        "reviews": {"rating": None, "highlights": []},
-        "status": None
-    }
+    bookings = []
+    # Split raw text into chunks per booking
+    chunks = re.split(r"(?:Booking ID|Reservation)[:\- ]", raw_text, flags=re.IGNORECASE)
 
-    # Confirmation
-    conf_match = re.search(r"(Booking ID|Confirmation|Ref)[:\- ]+([A-Z0-9]+)", raw_text, re.IGNORECASE)
-    if conf_match:
-        parsed["confirmation"] = conf_match.group(2)
+    for chunk in chunks:
+        if not chunk.strip():
+            continue
 
-    # Cancellation policy
-    cancel_match = re.search(r"(cancellation policy|cancellation)[:\- ]+(.+?)(\.|\n)", raw_text, re.IGNORECASE)
-    if cancel_match:
-        parsed["cancellation_policy"] = cancel_match.group(2).strip()
+        parsed = {
+            "confirmation": None,
+            "cancellation_policy": None,
+            "payment_options": [],
+            "reviews": {"rating": None, "highlights": []},
+            "status": None
+        }
 
-    # Payment options
-    payments = re.findall(r"(Credit Card|PayPal|Cash|UPI)", raw_text, re.IGNORECASE)
-    if payments:
-        parsed["payment_options"] = list(set([p.title() for p in payments]))
+        # Confirmation
+        conf_match = re.search(r"([A-Z0-9]{3,})", chunk)
+        if conf_match:
+            parsed["confirmation"] = conf_match.group(1)
 
-    # Reviews (rating + highlights)
-    rating_match = re.search(r"rating[:\- ]+([0-9]\.[0-9])", raw_text, re.IGNORECASE)
-    if rating_match:
-        parsed["reviews"]["rating"] = float(rating_match.group(1))
+        # Cancellation policy
+        cancel_match = re.search(r"(cancellation policy|cancellation)[:\- ]+(.+?)(\.|\n)", chunk, re.IGNORECASE)
+        if cancel_match:
+            parsed["cancellation_policy"] = cancel_match.group(2).strip()
 
-    highlights = re.findall(r"(easy booking|refund|support|smooth|secure payment)", raw_text, re.IGNORECASE)
-    if highlights:
-        parsed["reviews"]["highlights"] = list(set([h.capitalize() for h in highlights]))
+        # Payment options
+        payments = re.findall(r"(Credit Card|PayPal|Cash|UPI)", chunk, re.IGNORECASE)
+        if payments:
+            parsed["payment_options"] = list(set([p.title() for p in payments]))
 
-    # Status
-    if "confirmed" in raw_text.lower() or "reservation" in raw_text.lower():
-        parsed["status"] = "Reservation confirmed"
+        # Reviews
+        rating_match = re.search(r"rating[:\- ]+([0-9]\.[0-9])", chunk, re.IGNORECASE)
+        if rating_match:
+            parsed["reviews"]["rating"] = float(rating_match.group(1))
 
-    return parsed
+        highlights = re.findall(r"(easy booking|refund|support|smooth|secure payment)", chunk, re.IGNORECASE)
+        if highlights:
+            parsed["reviews"]["highlights"] = list(set([h.capitalize() for h in highlights]))
+
+        # Status
+        if "confirmed" in chunk.lower() or "reservation" in chunk.lower():
+            parsed["status"] = "Reservation confirmed"
+
+        bookings.append(parsed)
+
+    return bookings
