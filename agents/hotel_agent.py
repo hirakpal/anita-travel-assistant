@@ -2,24 +2,13 @@
 import os
 import requests
 import youtube_rag
-
+from prompts.flight_prompt import HOTEL_PROMPT
 class HotelAgent:
     def __init__(self, name="HotelAgent", mode="Online", provider="gemini"):
         self.name = name
         self.mode = mode
         self.provider = provider
-        self.prompt = """
-        You are the Hotel Agent.
-        Task: Suggest 1–2 hotel options based on destination, budget tier, and traveler profile.
-        Include:
-        - Hotel name
-        - Location (distance from airport/center)
-        - Room types (Standard, Deluxe, Suite)
-        - Amenities (WiFi, Pool, Breakfast)
-        - Price range
-        - Guest reviews (rating + highlights)
-        - Why it fits the user’s profile (budget, family, luxury).
-        """
+        self.prompt = HOTEL_PROMPT
 
     def run(self, state):
         if not state.get("destination"):
