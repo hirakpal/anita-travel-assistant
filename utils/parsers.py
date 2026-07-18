@@ -230,6 +230,44 @@ def parse_transport_output(raw_text: str):
 
     return transports
 
+import json
+
+def parse_flights_output(text: str) -> list[dict]:
+    """
+    Parse Gemini's flight JSON output into a structured list of flights.
+    Expected fields: airline, route, departure, arrival, duration,
+                     class_options, baggage_allowance, price_range,
+                     reviews, fit.
+    """
+    try:
+        data = json.loads(text)
+        if isinstance(data, dict) and "flights" in data:
+            flights = data["flights"]
+        elif isinstance(data, list):
+            flights = data
+        else:
+            flights = [data]
+
+        parsed = []
+        for f in flights:
+            parsed.append({
+                "airline": f.get("airline", "Unknown"),
+                "route": f.get("route", ""),
+                "departure": f.get("departure", ""),
+                "arrival": f.get("arrival", ""),
+                "duration": f.get("duration", ""),
+                "class_options": f.get("class_options", []),
+                "baggage_allowance": f.get("baggage_allowance", ""),
+                "price_range": f.get("price_range", ""),
+                "reviews": f.get("reviews", {}),
+                "fit": f.get("fit", ""),
+                "constraint_applied": f.get("constraint_applied", "none")
+            })
+        return parsed
+
+    except Exception as e:
+        # Fallback: return raw text if parsing fails
+        return [{"raw_output": text, "error": str(e)}]
 
 
 def parse_alerts_output(raw_text: str) -> List[dict]:
