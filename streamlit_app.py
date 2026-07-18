@@ -1,84 +1,121 @@
 import streamlit as st
-import plotly.express as px
 
-# Toggle between live and demo mode
-mode = st.radio("Mode", ["Live 🔴", "Demo 🟢"])
+API_KEY = st.secrets["GOOGLE_MAPS_API_KEY"]
 
-# Mock responses for demo mode
-mock_data = {
-    "pre_trip": {
-        "event": "Rome airport strike planned on 15 Aug",
-        "alert": "Flight AI-202 may be disrupted",
-        "suggestion": "Switch to Flight AI-204 on 16 Aug"
-    },
-    "ongoing_trip": {
-        "event": "Trastevere street festival tonight at 6 PM",
-        "alert": "Road closure near Trastevere after 5 PM",
-        "suggestion": "Move dinner to Piazza Navona and add festival visit"
-    }
-}
+# Mode toggle
+mode = st.radio("Select Mode", ["Online", "Offline", "Demo"])
 
-def run_event_agent(location, date):
-    if mode == "Demo 🟢":
-        return mock_data["ongoing_trip"]["event"]
-    else:
-        # Replace with Google Events API call
-        return f"Live events fetched for {location} on {date}"
+# Helper: Google Maps Embed
+def show_map(origin, destination, waypoints=[]):
+    if mode == "Online":
+        wp_str = "|".join(waypoints) if waypoints else ""
+        maps_url = f"https://www.google.com/maps/embed/v1/directions?key={API_KEY}&origin={origin}&destination={destination}&waypoints={wp_str}"
+        st.markdown(f"""
+            <iframe width="100%" height="400" frameborder="0" style="border:0"
+            src="{maps_url}" allowfullscreen></iframe>
+        """, unsafe_allow_html=True)
+    elif mode == "Offline":
+        st.info(f"📍 Offline Mode: Cached route {origin} → {destination}")
+    else:  # Demo Mode
+        st.success(f"🎬 Demo Mode: Simulated route {origin} → {destination} with waypoints {waypoints}")
 
-def run_alert_agent(location):
-    if mode == "Demo 🟢":
-        return mock_data["ongoing_trip"]["alert"]
-    else:
-        # Replace with live disruption API call
-        return f"Live alerts fetched for {location}"
+# Reusable suggestion card
+def suggestion_card(icon, title, price, rating, popularity, distance=None, duration=None, cuisine=None):
+    st.markdown(f"""
+    {icon} **{title}**  
+    💰 Price: {price}  
+    ⭐ Popularity: {popularity} (Rating: {rating})  
+    {f"🚶 Distance: {distance} | ⏱️ Time: {duration}" if distance and duration else ""}  
+    {f"🍴 Cuisine: {cuisine}" if cuisine else ""}
+    """)
 
-def run_tour_agent(location, date):
-    event = run_event_agent(location, date)
-    alert = run_alert_agent(location)
-    if mode == "Demo 🟢":
-        return mock_data["ongoing_trip"]["suggestion"]
-    else:
-        return f"Tour plan adjusted based on {event} and {alert}"
-
-# UI rendering
-st.title("ANITA Timeline Tracker")
-
-st.markdown("### 📍 Location → 🎉 Event → 🚨 Alert → 🏛️ Tour")
-
-event = run_event_agent("Rome", "13 July 2026")
-alert = run_alert_agent("Rome")
-suggestion = run_tour_agent("Rome", "13 July 2026")
-
-st.info(f"Event: {event}")
-st.warning(f"Alert: {alert}")
-
-# Approval workflow card
-st.markdown("### Suggested Change")
-st.write(f"Original Plan: Dinner at Trastevere, 7 PM")
-st.write(f"Suggested Plan: {suggestion}")
-
-col1, col2 = st.columns(2)
-if col1.button("✅ Approve Change"):
-    st.success("Change approved — itinerary updated ✔")
-if col2.button("❌ Keep Original Plan"):
-    st.error("Original plan retained ✖")
-
-# Travel DNA Radar Chart
-travel_dna = {
-    "Budget": 6,
-    "Hotel Style": 7,
-    "Food Preference": 8,
-    "Tour Type": 7,
-    "Flight Comfort": 6,
-    "Weather Tolerance": 5,
-    "Transport Preference": 6,
-    "Event Engagement": 8 if mode == "Demo 🟢" else 5
-}
-
-df = px.data.wind()  # placeholder
-df = px.line_polar(
-    pd.DataFrame(dict(r=list(travel_dna.values()), theta=list(travel_dna.keys()))),
-    r='r', theta='theta', line_close=True
+# Tabs
+tab_itinerary, tab_flights, tab_hotels, tab_transport, tab_activities, tab_culinary, tab_disruptions, tab_alerts = st.tabs(
+    ["Itinerary", "Flights", "Hotels", "Transport", "Activities", "Culinary", "Disruptions", "Proactive Alerts"]
 )
-df.update_traces(fill='toself')
-st.plotly_chart(df)
+
+# ---------------- ITINERARY TAB ----------------
+with tab_itinerary:
+    st.header("Itinerary Overview")
+    st.write(f"Mode: {mode}")
+    show_map("Jaipur Airport", "Jaipur Hotel")
+
+# ---------------- FLIGHTS TAB ----------------
+with tab_flights:
+    st.header("Flights")
+    if mode == "Demo":
+        suggestion_card("✈️", "Demo Flight", "₹3000", "4.0", "🌟 Simulated")
+    else:
+        suggestion_card("✈️", "IndiGo 6E-330", "₹4000", "4.5", "🔥 Popular")
+    show_map("Bengaluru Airport", "Jaipur Airport")
+
+# ---------------- HOTELS TAB ----------------
+with tab_hotels:
+    st.header("Hotels")
+    if mode == "Demo":
+        suggestion_card("🏨", "Demo Hotel", "₹₹", "4.0", "🌟 Simulated")
+    else:
+        suggestion_card("🏨", "ITC Rajputana Jaipur", "₹₹₹", "4.5", "🔥 Popular")
+    show_map("Jaipur Airport", "ITC Rajputana Jaipur")
+
+# ---------------- TRANSPORT TAB ----------------
+with tab_transport:
+    st.header("Transport")
+    if mode == "Demo":
+        suggestion_card("🚖", "Demo Cab", "₹200", "N/A", "🌟 Simulated", distance="8 km", duration="15 min")
+    else:
+        suggestion_card("🚖", "Cab Service", "₹500", "N/A", "👍 Local option", distance="10 km", duration="20 min")
+    show_map("ITC Rajputana Jaipur", "Amber Fort Jaipur")
+    if mode == "Online":
+        st.warning("⚠️ Traffic congestion detected, suggest earlier pickup.")
+
+# ---------------- ACTIVITIES TAB ----------------
+with tab_activities:
+    st.header("Activities")
+    itinerary_day1 = {
+        "Morning": "Amber Fort Jaipur",
+        "Lunch": "Laxmi Misthan Bhandar Jaipur",
+        "Afternoon": "City Palace Jaipur",
+        "Dinner": "Hawa Mahal Jaipur"
+    }
+    for slot, loc in itinerary_day1.items():
+        suggestion_card("🎯", f"{slot}: {loc}", "₹₹", "4.6", "🔥 Must-see")
+    show_map(itinerary_day1["Morning"], itinerary_day1["Dinner"], [itinerary_day1["Lunch"], itinerary_day1["Afternoon"]])
+
+# ---------------- CULINARY TAB ----------------
+with tab_culinary:
+    st.header("Culinary")
+    cuisine_filter = st.selectbox("Cuisine Preference", ["Any", "Vegetarian", "Vegan", "Street Food", "Fine Dining"])
+    if mode == "Demo":
+        suggestion_card("🍽️", "Demo Restaurant", "₹₹", "4.0", "🌟 Simulated", cuisine=cuisine_filter)
+    else:
+        suggestion_card("🍽️", "Laxmi Misthan Bhandar", "₹₹", "4.6", "🔥 Popular", distance="1.2 km", duration="5 min walk", cuisine=cuisine_filter)
+    show_map("Amber Fort Jaipur", "Laxmi Misthan Bhandar Jaipur")
+
+# ---------------- DISRUPTIONS TAB ----------------
+with tab_disruptions:
+    st.header("Disruption Alerts")
+    if mode == "Demo":
+        st.error("🚨 Demo Disruption: Flight simulated delay")
+        st.success("✅ Demo Alternative Approved")
+    else:
+        st.error("🚨 Flight SG-112 delayed by 3 hours | ⚠️ Hotel check-in risk")
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("Approve Vistara UK-450"):
+                st.success("✅ Approved. Itinerary updated.")
+                st.info("♻️ Realignment triggered.")
+        with col2:
+            if st.button("Keep Original Plan"):
+                st.warning("🛑 Original plan retained. Risks acknowledged.")
+
+# ---------------- PROACTIVE ALERTS TAB ----------------
+with tab_alerts:
+    st.header("Proactive Alerts")
+    if mode == "Demo":
+        st.warning("🌦️ Demo Alert: Simulated rain forecast → Indoor activity suggested.")
+    elif mode == "Online":
+        st.warning("🌦️ Rain forecast detected → Suggest indoor museum instead of outdoor walk.")
+        st.warning("🚧 Road closure detected → Suggest alternate transport route.")
+    else:
+        st.info("📍 Offline Mode: No live proactive alerts, using cached recommendations.")
