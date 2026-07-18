@@ -47,6 +47,19 @@ class ANITA:
         impact_report = self.agents["impact"].assess(results, traveler_type, preferences)
         results["impact_assessment"] = impact_report.dict()
 
+        # Step 3: Wrap structured ImpactReport into conversational explanation
+        narrative = []
+        if impact_report.budget["flag"] == "Expensive":
+            narrative.append("Your hotel choice looks expensive, so I’ve pulled budget alternatives.")
+        if impact_report.accessibility.get("wheelchair_friendly_hotels"):
+            narrative.append("Accessibility is flagged — I’ve added wheelchair‑friendly hotel and tour options.")
+        if impact_report.risk["risk_level"] == "High":
+            narrative.append("Risk level is high — I suggest safer transport routes or daytime flights.")
+        if impact_report.sustainability["carbon_score"] == "High":
+            narrative.append("This itinerary has a high carbon footprint — eco‑friendly hotels and metro transport are available.")
+
+        results["impact_narrative"] = " ".join(narrative) if narrative else "Your itinerary looks balanced and well‑suited."
+
         # Step 3: Generate alternates based on impact findings
         alternates = {}
         if "hotel" in impact_report.alternates:
@@ -58,7 +71,21 @@ class ANITA:
         results["alternate_options"] = alternates
 
         return results
+       
+        # Step 4: Generate alternates based on impact findings
+        alternates = {}
+        if "hotel" in impact_report.alternates:
+            alternates["hotels"] = self.agents["hotel"].run({**self.state_manager.state, "constraint": "budget"})
+        if "transport" in impact_report.alternates:
+            alternates["transport"] = self.agents["flight"].run({**self.state_manager.state, "constraint": "safe"})
+        if "tour" in impact_report.alternates:
+            alternates["tours"] = self.agents["tour"].run({**self.state_manager.state, "constraint": "accessible"})
+        results["alternate_options"] = alternates
 
+    return results
+
+
+    
     def finalize_booking(self, itinerary, user_confirmation):
         if user_confirmation:
             return self.agents["booking"].run(itinerary)
