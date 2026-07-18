@@ -57,21 +57,9 @@ class ANITA:
             narrative.append("Risk level is high — I suggest safer transport routes or daytime flights.")
         if impact_report.sustainability["carbon_score"] == "High":
             narrative.append("This itinerary has a high carbon footprint — eco‑friendly hotels and metro transport are available.")
-
+        
         results["impact_narrative"] = " ".join(narrative) if narrative else "Your itinerary looks balanced and well‑suited."
 
-        # Step 3: Generate alternates based on impact findings
-        alternates = {}
-        if "hotel" in impact_report.alternates:
-            alternates["hotels"] = self.agents["hotel"].run({**self.state_manager.state, "constraint": "budget"})
-        if "transport" in impact_report.alternates:
-            alternates["transport"] = self.agents["flight"].run({**self.state_manager.state, "constraint": "safe"})
-        if "tour" in impact_report.alternates:
-            alternates["tours"] = self.agents["tour"].run({**self.state_manager.state, "constraint": "accessible"})
-        results["alternate_options"] = alternates
-
-        return results
-       
         # Step 4: Generate alternates based on impact findings
         alternates = {}
         if "hotel" in impact_report.alternates:
@@ -80,9 +68,10 @@ class ANITA:
             alternates["transport"] = self.agents["flight"].run({**self.state_manager.state, "constraint": "safe"})
         if "tour" in impact_report.alternates:
             alternates["tours"] = self.agents["tour"].run({**self.state_manager.state, "constraint": "accessible"})
+        
         results["alternate_options"] = alternates
 
-    return results
+        return results
 
 
     
