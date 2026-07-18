@@ -1,58 +1,39 @@
 class TransportAgent:
-    def __init__(self, name):
+    def __init__(self, name="TransportAgent"):
         self.name = name
         self.prompt = """
         You are the Transport Agent.
-        Task: Suggest trains, buses, or local transfers based on destination, arrival, and departure times.
+        Task: Suggest local transport options between hotel, airport, and activities.
         Include:
-        - Mode of transport (train, bus, shuttle, taxi)
-        - Departure & arrival times
+        - Mode (Cab, Metro, Bus, Rental Car)
         - Duration
         - Price range
-        - Accessibility (family-friendly, wheelchair access, etc.)
+        - Availability
         - Reviews (rating + highlights)
-        - Fit with user’s arrival/departure window
+        - Why it fits the user’s profile (budget, convenience, family).
         """
 
     def run(self, state):
-        if not all(k in state for k in ["destination", "arrival_time", "departure_time"]):
-            return {"error": "Destination, arrival, or departure time missing"}
-        
-        return {
-            "transport": [
-                {
-                    "mode": "Airport Shuttle Bus",
-                    "route": f"Airport → {state['destination']} City Center",
-                    "departure": state["arrival_time"],
-                    "duration": "45 min",
-                    "price_range": "$10–$15",
-                    "accessibility": "Family-friendly, luggage space",
-                    "reviews": {
-                        "rating": 4.4,
-                        "highlights": [
-                            "Reliable service",
-                            "Affordable compared to taxis",
-                            "Runs every 30 minutes"
-                        ]
-                    },
-                    "fit": "Matches arrival window"
-                },
-                {
-                    "mode": "Train",
-                    "route": f"{state['destination']} City Center → Airport",
-                    "departure": state["departure_time"],
-                    "duration": "40 min",
-                    "price_range": "$12–$18",
-                    "accessibility": "Wheelchair accessible",
-                    "reviews": {
-                        "rating": 4.6,
-                        "highlights": [
-                            "Fast and punctual",
-                            "Comfortable seating",
-                            "Good for families"
-                        ]
-                    },
-                    "fit": "Matches departure window"
-                }
-            ]
-        }
+        if not state.get("origin") or not state.get("destination"):
+            return {"error": "Origin or destination missing"}
+
+        transports = [
+            {
+                "mode": "Cab",
+                "duration": "20 min",
+                "price_range": "$10–$15",
+                "availability": "24/7",
+                "reviews": {"rating": 4.3, "highlights": ["Reliable drivers", "Comfortable rides"]},
+                "fit": "Convenient for families"
+            },
+            {
+                "mode": "Metro",
+                "duration": "25 min",
+                "price_range": "$2–$3",
+                "availability": "6 AM – 11 PM",
+                "reviews": {"rating": 4.0, "highlights": ["Fast", "Budget‑friendly"]},
+                "fit": "Best for solo travelers on budget"
+            }
+        ]
+        state["transport"] = transports
+        return state
