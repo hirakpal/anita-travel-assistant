@@ -2,7 +2,7 @@
 import os
 import requests
 from utils.parsers import parse_booking_output
-from prompts import BOOKING_PROMPT
+from prompts.booking_agent import BOOKING_PROMPT
 
 class BookingAgent:
     def __init__(self, name="BookingAgent", mode="Online", provider="gemini"):
