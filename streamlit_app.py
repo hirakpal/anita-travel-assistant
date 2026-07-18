@@ -7,16 +7,20 @@ API_KEY = st.secrets["GOOGLE_MAPS_API_KEY"]
 mode = st.radio("Select Mode", ["Online", "Demo"])
 
 # Helper: Google Maps Embed
-def show_map(origin, destination, waypoints=[]):
+def show_map(origin, destination, waypoints=None):
     if mode == "Online":
-        wp_str = "|".join(waypoints) if waypoints else ""
-        maps_url = f"https://www.google.com/maps/embed/v1/directions?key={API_KEY}&origin={origin}&destination={destination}&waypoints={wp_str}"
+        if waypoints and len(waypoints) > 0:
+            wp_str = "|".join([w for w in waypoints if w])  # filter out empty strings
+            maps_url = f"https://www.google.com/maps/embed/v1/directions?key={API_KEY}&origin={origin}&destination={destination}&waypoints={wp_str}"
+        else:
+            maps_url = f"https://www.google.com/maps/embed/v1/directions?key={API_KEY}&origin={origin}&destination={destination}"
         st.markdown(f"""
             <iframe width="100%" height="400" frameborder="0" style="border:0"
             src="{maps_url}" allowfullscreen></iframe>
         """, unsafe_allow_html=True)
-    else:  # Demo Mode
+    elif mode == "Demo":
         st.success(f"🎬 Demo Mode: Simulated route {origin} → {destination} with waypoints {waypoints}")
+
 
 # Reusable suggestion card
 def suggestion_card(icon, title, price, rating, popularity, distance=None, duration=None, cuisine=None):
