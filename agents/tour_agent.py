@@ -1,4 +1,4 @@
-#agents/tour_agents.py
+#agents/tour_agent.py
 import os, requests
 from utils.parsers import (
     parse_tours_output,
