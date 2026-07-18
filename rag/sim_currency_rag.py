@@ -1,3 +1,4 @@
+#rag/sim_currency_rag.py
 import os
 import pinecone
 from datetime import datetime
