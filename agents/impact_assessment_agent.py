@@ -1,7 +1,11 @@
+import os
+import requests
+
 class ImpactAssessmentAgent:
-    def __init__(self, name="ImpactAssessmentAgent", mode="Online"):
+    def __init__(self, name="ImpactAssessmentAgent", mode="Online", provider="gemini"):
         self.name = name
         self.mode = mode
+        self.provider = provider
         self.prompt = """
         You are the Impact Assessment Agent.
         Task: Evaluate disruptions and changes in itinerary.
@@ -13,80 +17,38 @@ class ImpactAssessmentAgent:
 
     def run(self, state):
         disruptions = state.get("disruptions", [])
-        assessments = []
 
-        # Demo mode → stubbed disruptions
+        # DEMO MODE → stubbed disruptions
         if self.mode == "Demo":
             state["impact_assessment"] = [
                 {"risk": "Demo disruption: flight delay risk", "severity": "Medium", "mitigation": "Rebook flight"}
             ]
             return state
 
-        # Flight disruptions
-        if "flights" in state and disruptions:
-            assessments.append({
-                "risk": "Flight delay or cancellation",
-                "severity": "High",
-                "mitigation": "Rebook flight, notify hotel, adjust itinerary"
-            })
+        # ONLINE MODE → Gemini API
+        if self.provider == "gemini":
+            api_key = os.getenv("GOOGLE_API_KEY")
+            try:
+                resp = requests.post(
+                    "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent",
+                    headers={"Authorization": f"Bearer {api_key}"},
+                    json={
+                        "contents": [{
+                            "parts": [{
+                                "text": f"{self.prompt}\nDisruptions: {disruptions}\nState: {state}"
+                            }]
+                        }]
+                    },
+                    timeout=15
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                output_text = data["candidates"][0]["content"]["parts"][0]["text"]
 
-        # Hotel disruptions
-        if "hotels" in state and disruptions:
-            assessments.append({
-                "risk": "Late hotel check-in or overbooking",
-                "severity": "Medium",
-                "mitigation": "Notify hotel, arrange alternative accommodation"
-            })
+                # For now, store raw Gemini output. Later, parse into structured JSON.
+                state["impact_assessment"] = [{"raw_output": output_text}]
+            except Exception as e:
+                print(f"⚠️ Gemini API error: {e!r}")
+                state["impact_assessment"] = [{"error": "Unable to fetch impact assessment from Gemini"}]
 
-        # Activity disruptions
-        if "activities" in state and disruptions:
-            assessments.append({
-                "risk": "Activity cancellation due to weather or overbooking",
-                "severity": "Medium",
-                "mitigation": "Reschedule or choose indoor alternatives"
-            })
-
-        # Transport disruptions
-        if "transport" in state and disruptions:
-            assessments.append({
-                "risk": "Traffic delays or metro closures",
-                "severity": "Medium",
-                "mitigation": "Use alternate routes, buffer travel time"
-            })
-
-        # Weather advisories
-        if "weather" in state and "advisories" in state["weather"]:
-            advisories = state["weather"]["advisories"]
-            if advisories and advisories != "No major advisories":
-                assessments.append({
-                    "risk": f"Weather advisory: {advisories}",
-                    "severity": "High",
-                    "mitigation": "Reschedule outdoor activities, monitor alerts"
-                })
-
-        # Visa issues
-        if "visa" in state:
-            assessments.append({
-                "risk": "Visa processing delays or entry restrictions",
-                "severity": "High",
-                "mitigation": "Apply early, keep embassy contact handy"
-            })
-
-        # Currency/utility issues
-        if "utility_insights" in state:
-            assessments.append({
-                "risk": "Currency exchange fee spikes or SIM unavailability",
-                "severity": "Low",
-                "mitigation": "Use cards/digital wallets, buy SIM at airport"
-            })
-
-        # Health advisories
-        if "health" in state:
-            assessments.append({
-                "risk": "Local health advisory or epidemic",
-                "severity": "High",
-                "mitigation": "Carry vaccines, insurance, avoid hotspots"
-            })
-
-        state["impact_assessment"] = assessments
         return state
