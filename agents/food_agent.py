@@ -2,7 +2,7 @@
 import os
 import requests
 import youtube_rag
-from prompts.flight_prompt import FOOD_PROMPT
+from prompts.food_prompt import FOOD_PROMPT
 class FoodAgent:
     def __init__(self, name="FoodAgent", mode="Online", provider="gemini"):
         self.name = name
