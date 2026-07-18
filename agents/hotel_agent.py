@@ -11,7 +11,8 @@ class HotelAgent:
         - Amenities (WiFi, pool, gym, breakfast, etc.)
         - Parking availability (on-site, valet, free/paid)
         - Approximate price range
-        - Guest reviews (summary of ratings and highlights)
+        - Cancellation policies (flexible, non-refundable, free cancellation until X days)
+        - Guest reviews (rating + highlights)
         - Why it fits the user’s profile (budget, family, luxury).
         If no destination is provided, return an error message.
         """
@@ -20,7 +21,6 @@ class HotelAgent:
         if "destination" not in state:
             return {"error": "Destination missing"}
         
-        # Stubbed example output — later you’ll replace with API calls
         return {
             "hotels": [
                 {
@@ -30,6 +30,7 @@ class HotelAgent:
                     "amenities": ["Free WiFi", "Pool", "Gym", "Breakfast included"],
                     "parking": "Free on-site parking",
                     "price_range": "$120–$150 per night",
+                    "cancellation_policy": "Free cancellation up to 48 hours before check-in",
                     "reviews": {
                         "rating": 4.5,
                         "highlights": [
@@ -47,6 +48,7 @@ class HotelAgent:
                     "amenities": ["WiFi", "Breakfast optional"],
                     "parking": "Paid parking available",
                     "price_range": "$50–$70 per night",
+                    "cancellation_policy": "Non-refundable booking",
                     "reviews": {
                         "rating": 3.8,
                         "highlights": [
