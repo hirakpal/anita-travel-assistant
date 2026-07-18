@@ -1,10 +1,13 @@
+from orchestrator.state_manager import StateManager
 from agents.hotel_agent import HotelAgent
 from agents.food_agent import FoodAgent
 from agents.tour_agent import TourAgent
 from agents.flight_agent import FlightAgent
+from agents.weather_agent import WeatherAgent
+from agents.booking_agent import BookingAgent
 
 class ANITA:
-    def __init__(self):
+    def __init__(self, initial_state):
         # Master prompt defines ANITA's role and orchestration logic
         self.prompt = """
         You are ANITA, an AI Travel Orchestrator and Planner.
@@ -43,18 +46,30 @@ class ANITA:
         - Act like a trusted travel planner, not just a search engine.
         - Always prioritize clarity, personalization, and resilience.
         """
-
+        self.state_manager = StateManager(initial_state)
         # Initialize agents
         self.agents = {
             "hotel": HotelAgent("HotelAgent"),
             "food": FoodAgent("FoodAgent"),
             "tour": TourAgent("TourAgent"),
-            "flight": FlightAgent("FlightAgent")
+            "flight": FlightAgent("FlightAgent"),
+            "weather": WeatherAgent("WeatherAgent"),
+            "booking": BookingAgent("BookingAgent")
         }
 
-    def orchestrate(self, state):
+    def orchestrate(self):
         results = {}
-        for key, agent in self.agents.items():
-            results[key] = agent.run(state)
+        for name, agent in self.agents.items():
+            if self.state_manager.route(name):
+                output = agent.run(self.state_manager.state)
+                self.state_manager.update(name, output)
+                results[name] = output
+
+                # Special routing: weather disruption → rerun TourAgent
+                if name == "weather" and "advisories" in output.get("weather", {}):
+                    if "storm" in output["weather"]["advisories"].lower():
+                        alt_tours = self.agents["tour"].run(self.state_manager.state)
+                        self.state_manager.update("tour", alt_tours)
+                        results["tour"] = alt_tours
         return results
 
