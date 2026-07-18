@@ -2,23 +2,14 @@
 import os
 import requests
 from utils.parsers import parse_booking_output
+from prompts import BOOKING_PROMPT
 
 class BookingAgent:
     def __init__(self, name="BookingAgent", mode="Online", provider="gemini"):
         self.name = name
         self.mode = mode
         self.provider = provider
-        self.prompt = """
-        You are the Booking Agent.
-        Task: Given confirmed hotels, tours, and flights, finalize reservations.
-        Include:
-        - Booking confirmation details (reference number, dates)
-        - Cancellation policies (flexible, non-refundable, refund timelines)
-        - Payment options (credit card, PayPal, cash at property)
-        - Traveler reviews (rating + highlights like 'easy booking process')
-        - Adjust itinerary if changes occur (weather reroute, flight rebooking).
-        Return a summary of confirmed reservations.
-        """
+        self.prompt = BOOKING_PROMPT
 
     def run(self, state):
         # DEMO MODE → stubbed booking only
