@@ -1,9 +1,10 @@
 import streamlit as st
 
+# Secure API key from secrets
 API_KEY = st.secrets["GOOGLE_MAPS_API_KEY"]
 
-# Mode toggle
-mode = st.radio("Select Mode", ["Online", "Offline", "Demo"])
+# Mode toggle (only Online and Demo)
+mode = st.radio("Select Mode", ["Online", "Demo"])
 
 # Helper: Google Maps Embed
 def show_map(origin, destination, waypoints=[]):
@@ -14,8 +15,6 @@ def show_map(origin, destination, waypoints=[]):
             <iframe width="100%" height="400" frameborder="0" style="border:0"
             src="{maps_url}" allowfullscreen></iframe>
         """, unsafe_allow_html=True)
-    elif mode == "Offline":
-        st.info(f"📍 Offline Mode: Cached route {origin} → {destination}")
     else:  # Demo Mode
         st.success(f"🎬 Demo Mode: Simulated route {origin} → {destination} with waypoints {waypoints}")
 
@@ -114,8 +113,6 @@ with tab_alerts:
     st.header("Proactive Alerts")
     if mode == "Demo":
         st.warning("🌦️ Demo Alert: Simulated rain forecast → Indoor activity suggested.")
-    elif mode == "Online":
+    else:
         st.warning("🌦️ Rain forecast detected → Suggest indoor museum instead of outdoor walk.")
         st.warning("🚧 Road closure detected → Suggest alternate transport route.")
-    else:
-        st.info("📍 Offline Mode: No live proactive alerts, using cached recommendations.")
