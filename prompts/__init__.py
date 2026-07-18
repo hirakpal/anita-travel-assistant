@@ -9,7 +9,7 @@ from .weather_prompt import WEATHER_PROMPT
 from .impact_prompt import IMPACT_PROMPT
 from .rag_prompt import RAG_PROMPT
 from .booking_prompt import BOOKING_PROMPT
-
+from .transport_prompt import TRANSPORT_PROMPT
 __all__ = [
     "ANITA_PROMPT",
     "HOTEL_PROMPT",
@@ -20,6 +20,7 @@ __all__ = [
     "IMPACT_PROMPT",
     "RAG_PROMPT",
     "BOOKING_PROMPT",
+    "TRANSPORT_PROMPT"
 ]
 
 
