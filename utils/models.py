@@ -37,3 +37,29 @@ class Transport(BaseModel):
     availability: Optional[str]
     reviews: Review
     fit: Optional[str]
+
+class Alert(BaseModel):
+    type: str
+    message: str
+    severity: Optional[str]  # Low, Medium, High
+
+class Event(BaseModel):
+    name: str
+    date: Optional[str]
+    location: Optional[str]
+    description: Optional[str]
+    price_range: Optional[str]
+    reviews: Optional[List[str]]
+
+class Location(BaseModel):
+    name: str
+    type: Optional[str]  # Landmark, Museum, Park
+    opening_hours: Optional[str]
+    price_range: Optional[str]
+    reviews: Optional[List[str]]
+
+class News(BaseModel):
+    headline: str
+    source: Optional[str]
+    date: Optional[str]
+    summary: Optional[str]
