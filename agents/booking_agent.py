@@ -1,6 +1,7 @@
 import os
 import requests
 from utils.parsers import parse_booking_output
+
 class BookingAgent:
     def __init__(self, name="BookingAgent", mode="Online", provider="gemini"):
         self.name = name
@@ -23,7 +24,7 @@ class BookingAgent:
         if self.mode == "Demo":
             return {
                 "booking": {
-                    "confirmation": "Booking ID: DEMO123, Dates: 12–18 Aug",
+                    "confirmation": "DEMO123",
                     "cancellation_policy": "Demo: Free cancellation until 72 hours",
                     "payment_options": ["Credit Card", "PayPal"],
                     "reviews": {
@@ -53,10 +54,11 @@ class BookingAgent:
                 resp.raise_for_status()
                 data = resp.json()
                 output_text = data["candidates"][0]["content"]["parts"][0]["text"]
-                parsed_booking = parse_booking_output(output_text)
 
-                # For now, store raw Gemini output. Later, parse into structured JSON.
+                # Parse Gemini output into structured JSON
+                parsed_booking = parse_booking_output(output_text)
                 return {"booking": parsed_booking}
+
             except Exception as e:
                 print(f"⚠️ Gemini API error: {e!r}")
-                return {"booking": [{"error": "Unable to fetch booking confirmation from Gemini"}]}
+                return {"booking": {"error": "Unable to fetch booking confirmation from Gemini"}}
