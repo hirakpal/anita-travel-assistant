@@ -433,10 +433,16 @@ else:
             st.info("No local tips available yet for this destination.")
 
         st.subheader("📺 Video Highlights")
-        video_highlights = guide.get("video_highlights", [])
-        if video_highlights:
-            for v in video_highlights:
-                st.write(f"- {v}")
+        video_highlights = guide.get("video_highlights", {})
+        video_summary = video_highlights.get("summary", []) if isinstance(video_highlights, dict) else video_highlights
+        video_sources = video_highlights.get("sources", []) if isinstance(video_highlights, dict) else []
+        if video_summary:
+            for point in video_summary:
+                st.write(f"- {point}")
+            if video_sources:
+                with st.expander(f"Sources ({len(video_sources)} videos)"):
+                    for s in video_sources:
+                        st.caption(f"🎥 {s.get('title')} — {s.get('creator')}")
         else:
             st.info("No indexed travel-vlog content yet for this destination — this section fills in once real video data is indexed (see Local Tips above for AI-generated guidance in the meantime).")
 

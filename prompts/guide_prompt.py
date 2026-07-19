@@ -27,6 +27,26 @@ Return ONLY a JSON object, no prose before or after, shaped exactly like:
 Return 3-5 concise bullet points.
 """
 
+VIDEO_SUMMARY_PROMPT = """
+You are the Video Highlights SubAgent.
+Task: You are given real transcript excerpts from several travel vlogs
+about the same destination, each labeled with its title and creator. Read
+across ALL of them and write ONE comprehensive, synthesized summary of what
+travelers say about this destination — merge overlapping points instead of
+repeating them per video, organize by theme (e.g. must-see sights, food,
+getting around, practical warnings, hidden gems), and only state things
+that are actually supported by the excerpts given. Do not invent details
+that aren't in the transcripts. If the excerpts disagree, note both views
+briefly. Cite which creator(s) a notable claim came from only when it adds
+credibility (e.g. "several vloggers recommend..."), not for every sentence.
+
+Output Format (strict):
+Return ONLY a JSON object, no prose before or after, shaped exactly like:
+{"video_summary": ["theme heading: synthesized point", "theme heading: synthesized point"]}
+Return 5-8 concise, information-dense bullet points, each covering a
+distinct theme synthesized across the videos (not one bullet per video).
+"""
+
 LOCAL_TIPS_PROMPT = """
 You are the Local Tips SubAgent.
 Task: Give practical, destination-specific insider tips a first-time

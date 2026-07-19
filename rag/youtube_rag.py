@@ -71,9 +71,11 @@ def add_videos_to_index(videos, mode="Online"):
                 "creator": v["creator"],
                 "views": v["views"],
                 "upload_date": str(v["upload_date"]),
-                # Real spoken-content excerpt so summarize_results() can surface
-                # an actual highlight instead of just the title/tags.
-                "transcript_excerpt": (v.get("transcript") or "")[:500],
+                # Full-ish transcript excerpt (well under Pinecone's 40KB
+                # metadata cap) so a downstream Gemini call has enough real
+                # spoken content to synthesize an actual summary from,
+                # instead of just the first sentence or two.
+                "transcript_excerpt": (v.get("transcript") or "")[:2500],
             }
         ))
     _get_index().upsert(upserts)
@@ -102,6 +104,39 @@ def query_videos(destination, interests, top_k=5, mode="Online"):
 
     results = _get_index().query(vector=query_vector, top_k=top_k, include_metadata=True)
     return results
+
+# -------------------------------
+# Raw matches (for cross-video synthesis, e.g. the Guide tab's summary)
+# -------------------------------
+def get_video_transcripts(destination, top_k=8, mode="Online"):
+    """
+    Return the raw {title, creator, excerpt} for the top indexed videos on
+    this destination, so a caller can synthesize ONE combined summary
+    across all of them (rather than listing each video's snippet
+    separately, which just reads like disconnected quotes).
+    """
+    if mode == "Demo":
+        return [
+            {"title": f"Demo: {destination} highlights reel", "creator": "Demo Creator",
+             "excerpt": f"Demo transcript excerpt covering {destination}'s top sights and food."}
+        ]
+
+    query_text = f"{destination} travel guide things to do highlights culture food tips"
+    query_vector = embed_texts([query_text], input_type="query")[0]
+    results = _get_index().query(vector=query_vector, top_k=top_k, include_metadata=True)
+
+    videos = []
+    for match in results.get("matches", []):
+        meta = match.get("metadata", {})
+        excerpt = (meta.get("transcript_excerpt") or "").strip()
+        if not excerpt:
+            continue
+        videos.append({
+            "title": meta.get("title", ""),
+            "creator": meta.get("creator", ""),
+            "excerpt": excerpt,
+        })
+    return videos
 
 # -------------------------------
 # Summarization Agent

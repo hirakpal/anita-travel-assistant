@@ -5,7 +5,7 @@ import requests
 import concurrent.futures
 from prompts.anita_prompt import ANITA_PROMPT
 from prompts.itinerary_prompt import ITINERARY_PROMPT
-from prompts.guide_prompt import VISA_PROMPT, SIM_CURRENCY_PROMPT, LOCAL_TIPS_PROMPT
+from prompts.guide_prompt import VISA_PROMPT, SIM_CURRENCY_PROMPT, LOCAL_TIPS_PROMPT, VIDEO_SUMMARY_PROMPT
 from orchestrator.state_manager import StateManager
 from agents.hotel_agent import HotelAgent
 from agents.food_agent import FoodAgent
@@ -21,6 +21,7 @@ from utils.semantic_cache import semantic_call
 from utils.cache import call_api
 from utils.prompt_cache import build_gemini_request
 from rag import visa_rag
+from rag import youtube_rag
 from rag.youtube_ingest import ingest_destination_videos
 from utils.parsers import extract_json_object
 
@@ -252,15 +253,18 @@ class ANITA:
         Traveler Guide: visa requirements, SIM/currency info, local tips, and
         a rollup of YouTube-vlog highlights already gathered by other agents.
 
-        The RAG/Pinecone lookups (visa, SIM/currency, video highlights) only
-        return real data once someone has actually indexed content for this
-        destination — nothing in this codebase seeds that data yet, so in
-        practice they come back empty. Rather than show a broken-looking
-        blank tab, visa/SIM/tips each fall back to a direct Gemini call (in
-        Demo mode or on any failure, they fall back further to canned demo
-        text) — video_highlights alone stays honestly empty when there's no
-        actual indexed video content, since we won't fabricate "from
-        YouTube" citations that don't exist.
+        The RAG/Pinecone lookups (visa, SIM/currency) only return real data
+        once someone has actually indexed content for this destination —
+        nothing in this codebase seeds that data yet, so in practice they
+        come back empty. Rather than show a broken-looking blank tab,
+        visa/SIM/tips each fall back to a direct Gemini call (in Demo mode
+        or on any failure, they fall back further to canned demo text).
+
+        video_highlights is a genuine cross-video synthesis: instead of
+        listing each vlog's raw quote separately (which just reads like a
+        pile of disconnected snippets), we pull every indexed video's
+        transcript excerpt for this destination and hand ALL of them to one
+        Gemini call that merges overlapping points by theme.
         """
         destination = self.state_manager.state.get("destination", "")
 
@@ -273,9 +277,16 @@ class ANITA:
 
         sim_currency_info = results.get("transport", {}).get("utility_insights", [])
 
+        try:
+            video_matches = youtube_rag.get_video_transcripts(destination, top_k=8, mode=self.mode)
+        except Exception as e:
+            print(f"⚠️ Video transcript fetch error: {e!r}")
+            video_matches = []
+
         # Local tips always needs a Gemini call; visa/SIM only need one if
-        # their RAG lookup came back empty. Run whichever are needed
-        # concurrently instead of one-at-a-time.
+        # their RAG lookup came back empty; video summary only if we found
+        # transcripts to synthesize. Run whichever are needed concurrently
+        # instead of one-at-a-time.
         fallback_tasks = {"local_tips": (LOCAL_TIPS_PROMPT, "tips")}
         if not visa_info:
             fallback_tasks["visa"] = (VISA_PROMPT, "visa_info")
@@ -283,32 +294,65 @@ class ANITA:
             fallback_tasks["sim_currency"] = (SIM_CURRENCY_PROMPT, "sim_currency_info")
 
         fallback_results = {}
-        with concurrent.futures.ThreadPoolExecutor(max_workers=len(fallback_tasks)) as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=len(fallback_tasks) + 1) as executor:
             futures = {
                 executor.submit(self._guide_gemini_fallback, prompt, response_key, destination): name
                 for name, (prompt, response_key) in fallback_tasks.items()
             }
+            video_future = executor.submit(self._summarize_video_transcripts, video_matches, destination)
             for future in concurrent.futures.as_completed(futures):
                 fallback_results[futures[future]] = future.result()
+            video_summary = video_future.result()
 
         visa_info = fallback_results.get("visa", visa_info)
         sim_currency_info = fallback_results.get("sim_currency", sim_currency_info)
         local_tips = fallback_results["local_tips"]
 
-        video_highlights = []
-        seen = set()
-        for key in ("hotel", "food", "transport", "flight", "weather"):
-            for insight in results.get(key, {}).get("vlog_insights", []):
-                if insight not in seen:
-                    seen.add(insight)
-                    video_highlights.append(insight)
-
         return {
             "visa": visa_info,
             "sim_currency": sim_currency_info,
             "local_tips": local_tips,
-            "video_highlights": video_highlights,
+            "video_highlights": {
+                "summary": video_summary,
+                "sources": [{"title": v["title"], "creator": v["creator"]} for v in video_matches],
+            },
         }
+
+    def _summarize_video_transcripts(self, video_matches, destination):
+        """Turn several videos' transcript excerpts into one synthesized summary (see _build_guide)."""
+        if not video_matches:
+            return []
+        if self.mode == "Demo":
+            return [f"Demo: synthesized video summary for {destination}"]
+
+        transcripts_block = "\n\n".join(
+            f"--- Video: \"{v['title']}\" by {v['creator']} ---\n{v['excerpt']}"
+            for v in video_matches
+        )
+        try:
+            def _fetch():
+                api_key = os.getenv("GOOGLE_API_KEY")
+                body = build_gemini_request(
+                    "ANITA:guide:video_summary", VIDEO_SUMMARY_PROMPT,
+                    f"Destination: {destination}\n\n{transcripts_block}"
+                )
+                resp = requests.post(
+                    "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent",
+                    params={"key": api_key},
+                    json=body,
+                    timeout=25
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                return data["candidates"][0]["content"]["parts"][0]["text"]
+
+            cache_key = {"destination": destination, "video_ids": sorted(v["title"] for v in video_matches)}
+            text = call_api("gemini:guide:video_summary", cache_key, fetch_fn=_fetch)
+            obj = extract_json_object(text)
+            return (obj or {}).get("video_summary", []) or []
+        except Exception as e:
+            print(f"⚠️ Video summary error: {e!r}")
+            return []
 
     def _guide_gemini_fallback(self, prompt, response_key, destination):
         if self.mode == "Demo":
