@@ -4,6 +4,8 @@ import requests
 from rag.youtube_rag import query_videos, summarize_results
 from prompts.flight_prompt import FLIGHT_PROMPT
 from utils.parsers import parse_flights_output
+from utils.cache import call_api
+from utils.prompt_cache import build_gemini_request
 
 # Helper functions (can be moved to utils.py)
 CITY_TO_IATA = {
@@ -39,20 +41,28 @@ class FlightAgent:
         self.prompt = FLIGHT_PROMPT
 
     def _call_gemini(self, prompt, origin, destination, constraint=None):
-        api_key = os.getenv("GOOGLE_API_KEY")
-        text = f"{prompt}\nOrigin: {origin}\nDestination: {destination}"
-        if constraint:
-            text += f"\nConstraint: {constraint}"
+        def _fetch():
+            api_key = os.getenv("GOOGLE_API_KEY")
+            text = f"Origin: {origin}\nDestination: {destination}"
+            if constraint:
+                text += f"\nConstraint: {constraint}"
 
-        resp = requests.post(
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent",
-            headers={"Authorization": f"Bearer {api_key}"},
-            json={"contents": [{"parts": [{"text": text}]}]},
-            timeout=15
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        return data["candidates"][0]["content"]["parts"][0]["text"]
+            # Static prompt is sent via a cached-content handle (if available)
+            # instead of being re-transmitted on every call.
+            body = build_gemini_request(self.name, prompt, text)
+            resp = requests.post(
+                "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent",
+                headers={"Authorization": f"Bearer {api_key}"},
+                json=body,
+                timeout=15
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            return data["candidates"][0]["content"]["parts"][0]["text"]
+
+        # Identical origin/destination/constraint → served from cache, no Gemini tokens spent
+        params = {"origin": origin, "destination": destination, "constraint": constraint}
+        return call_api("gemini:flight", params, fetch_fn=_fetch)
 
     def run(self, state):
         if not all(k in state for k in ["origin", "destination", "arrival_time", "departure_time"]):

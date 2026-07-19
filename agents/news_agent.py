@@ -3,6 +3,8 @@ import os
 import requests
 from prompts.news_prompt import NEWS_PROMPT
 from utils.parsers import parse_news_output
+from utils.cache import call_api
+from utils.prompt_cache import build_gemini_request
 
 
 class NewsAgent:
@@ -24,23 +26,22 @@ class NewsAgent:
             return state
 
         # ONLINE MODE → Gemini API
-        api_key = os.getenv("GOOGLE_API_KEY")
-        try:
+        def _fetch():
+            api_key = os.getenv("GOOGLE_API_KEY")
+            body = build_gemini_request(self.name, self.prompt, f"Destination: {state['destination']}")
             resp = requests.post(
                 "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent",
                 headers={"Authorization": f"Bearer {api_key}"},
-                json={
-                    "contents": [{
-                        "parts": [{
-                            "text": f"{self.prompt}\nDestination: {state['destination']}"
-                        }]
-                    }]
-                },
+                json=body,
                 timeout=15
             )
             resp.raise_for_status()
             data = resp.json()
-            output_text = data["candidates"][0]["content"]["parts"][0]["text"]
+            return data["candidates"][0]["content"]["parts"][0]["text"]
+
+        try:
+            # Identical destination → served from cache, no Gemini tokens spent
+            output_text = call_api("gemini:news", {"destination": state["destination"]}, fetch_fn=_fetch)
             state["news"] = parse_news_output(output_text)
         except Exception as e:
             print(f"⚠️ Gemini API error: {e!r}")

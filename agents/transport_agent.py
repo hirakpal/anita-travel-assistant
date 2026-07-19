@@ -3,6 +3,8 @@ import os
 import requests
 from rag import sim_currency_rag
 from prompts.transport_prompt import TRANSPORT_PROMPT
+from utils.cache import call_api
+from utils.prompt_cache import build_gemini_request
 class TransportAgent:
     def __init__(self, name="TransportAgent", mode="Online", provider="gemini"):
         self.name = name
@@ -34,23 +36,24 @@ class TransportAgent:
 
         # ONLINE MODE → Gemini API + RAG
         if self.provider == "gemini":
-            api_key = os.getenv("GOOGLE_API_KEY")
-            try:
+            def _fetch():
+                api_key = os.getenv("GOOGLE_API_KEY")
+                text = f"Origin: {state['origin']}\nDestination: {state['destination']}"
+                body = build_gemini_request(self.name, self.prompt, text)
                 resp = requests.post(
                     "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent",
                     headers={"Authorization": f"Bearer {api_key}"},
-                    json={
-                        "contents": [{
-                            "parts": [{
-                                "text": f"{self.prompt}\nOrigin: {state['origin']}\nDestination: {state['destination']}"
-                            }]
-                        }]
-                    },
+                    json=body,
                     timeout=15
                 )
                 resp.raise_for_status()
                 data = resp.json()
-                output_text = data["candidates"][0]["content"]["parts"][0]["text"]
+                return data["candidates"][0]["content"]["parts"][0]["text"]
+
+            try:
+                # Identical origin/destination → served from cache, no Gemini tokens spent
+                params = {"origin": state["origin"], "destination": state["destination"]}
+                output_text = call_api("gemini:transport", params, fetch_fn=_fetch)
                 # For now, store raw Gemini output. Later, parse into structured JSON.
                 state["transport"] = [{"raw_output": output_text}]
             except Exception as e:

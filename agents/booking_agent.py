@@ -3,6 +3,8 @@ import os
 import requests
 from utils.parsers import parse_booking_output
 from prompts.booking_prompt import BOOKING_PROMPT
+from utils.cache import call_api
+from utils.prompt_cache import build_gemini_request
 
 class BookingAgent:
     def __init__(self, name="BookingAgent", mode="Online", provider="gemini"):
@@ -31,23 +33,22 @@ class BookingAgent:
 
         # ONLINE MODE → Gemini API
         if self.provider == "gemini":
-            api_key = os.getenv("GOOGLE_API_KEY")
-            try:
+            def _fetch():
+                api_key = os.getenv("GOOGLE_API_KEY")
+                body = build_gemini_request(self.name, self.prompt, f"State: {state}")
                 resp = requests.post(
                     "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent",
                     headers={"Authorization": f"Bearer {api_key}"},
-                    json={
-                        "contents": [{
-                            "parts": [{
-                                "text": f"{self.prompt}\nState: {state}"
-                            }]
-                        }]
-                    },
+                    json=body,
                     timeout=15
                 )
                 resp.raise_for_status()
                 data = resp.json()
-                output_text = data["candidates"][0]["content"]["parts"][0]["text"]
+                return data["candidates"][0]["content"]["parts"][0]["text"]
+
+            try:
+                # Identical state → served from cache, no Gemini tokens spent
+                output_text = call_api("gemini:booking", {"state": state}, fetch_fn=_fetch)
 
                 # Parse Gemini output into structured list of bookings
                 parsed_bookings = parse_booking_output(output_text)

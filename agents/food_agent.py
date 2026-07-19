@@ -3,6 +3,8 @@ import os
 import requests
 from rag import youtube_rag
 from prompts.food_prompt import FOOD_PROMPT
+from utils.cache import call_api
+from utils.prompt_cache import build_gemini_request
 class FoodAgent:
     def __init__(self, name="FoodAgent", mode="Online", provider="gemini"):
         self.name = name
@@ -24,23 +26,26 @@ class FoodAgent:
 
         # ONLINE MODE → Gemini API
         if self.provider == "gemini":
-            api_key = os.getenv("GOOGLE_API_KEY")
-            try:
+            preferences = state.get("preferences", "General")
+
+            def _fetch():
+                api_key = os.getenv("GOOGLE_API_KEY")
+                text = f"Destination: {state['destination']}\nFood preferences: {preferences}"
+                body = build_gemini_request(self.name, self.prompt, text)
                 resp = requests.post(
                     "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent",
                     headers={"Authorization": f"Bearer {api_key}"},
-                    json={
-                        "contents": [{
-                            "parts": [{
-                                "text": f"{self.prompt}\nDestination: {state['destination']}\nFood preferences: {state.get('preferences','General')}"
-                            }]
-                        }]
-                    },
+                    json=body,
                     timeout=15
                 )
                 resp.raise_for_status()
                 data = resp.json()
-                output_text = data["candidates"][0]["content"]["parts"][0]["text"]
+                return data["candidates"][0]["content"]["parts"][0]["text"]
+
+            try:
+                # Identical destination/preferences → served from cache, no Gemini tokens spent
+                params = {"destination": state["destination"], "preferences": preferences}
+                output_text = call_api("gemini:food", params, fetch_fn=_fetch)
 
                 # For now, store raw Gemini output. Later, parse into structured JSON.
                 state["restaurants"] = [{"raw_output": output_text}]
