@@ -100,7 +100,17 @@ class ANITA:
             try:
                 return self._chat_gemini(message, history or [])
             except Exception as e:
+                # Falling back here means Gemini couldn't be reached (bad key,
+                # quota/429, network) — the rule-based fallback below can't
+                # parse free text at all, it just assigns the whole message
+                # to one slot at a time, so silently degrading to it produces
+                # a confusing "it keeps re-asking" experience. Log loudly and
+                # tell the user plainly instead of pretending nothing happened.
+                log_step("chat:gemini", "error", error=e)
                 print(f"⚠️ Anita chat error: {e!r}")
+                reply, ready = self._chat_rule_based(message)
+                notice = "⚠️ I'm having trouble reaching my AI brain right now, so I'll take this one detail at a time. "
+                return notice + reply, ready
         return self._chat_rule_based(message)
 
     def _chat_gemini(self, message: str, history):
