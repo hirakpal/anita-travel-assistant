@@ -29,7 +29,11 @@ class StateManager:
         else:
             rules = {
                 "hotel": ["destination", "budget"],
-                "food": ["destination", "food_pref"],
+                # food_pref is optional (FoodAgent defaults it to "General"
+                # internally) — requiring it here silently skipped the whole
+                # Culinary tab whenever a user's chat message never named a
+                # food preference, with no error shown anywhere.
+                "food": ["destination"],
                 "tour": ["destination"],
                 "flight": ["origin", "destination"],
                 "weather": ["destination", "dates"],
