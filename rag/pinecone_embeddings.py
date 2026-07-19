@@ -18,12 +18,23 @@ EMBED_MODEL = "llama-text-embed-v2"
 _pc = None
 
 
-def _get_client():
+def get_pinecone_client():
+    """
+    Shared Pinecone client, reused by every RAG module. Each `Pinecone(...)`
+    instantiation triggers a slow plugin-discovery scan — creating one per
+    module (youtube_rag, visa_rag, sim_currency_rag, this module) instead
+    of sharing a single instance was adding tens of seconds per module to
+    every request. Construct it once, everywhere.
+    """
     global _pc
     if _pc is None:
         from pinecone import Pinecone
         _pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
     return _pc
+
+
+# Backwards-compatible alias for the name used within this module.
+_get_client = get_pinecone_client
 
 
 def embed_texts(texts, input_type="passage"):

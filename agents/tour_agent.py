@@ -1,5 +1,6 @@
 #agents/tour_agent.py
 import os, requests
+import concurrent.futures
 from utils.parsers import (
     parse_tours_output,
     parse_alerts_output,
@@ -114,35 +115,35 @@ class TourAgent:
         travel_party = state.get("travel_party")
         constraint = state.get("constraint")
 
+        destination = state["destination"]
+        # These 5 sub-calls are independent — run them concurrently instead
+        # of paying 5x sequential Gemini round-trip latency.
+        sub_calls = {
+            "tours": (self.prompt_tours, {"traveler_type": traveler_type, "travel_party": travel_party, "constraint": constraint}, parse_tours_output),
+            "alerts": (self.prompt_alerts, {}, parse_alerts_output),
+            "events": (self.prompt_events, {}, parse_events_output),
+            "locations": (self.prompt_locations, {}, parse_locations_output),
+            "news": (self.prompt_news, {}, parse_news_output),
+        }
+
+        results = {}
         try:
-            # Tours
-            tours_text = self._call_gemini(self.prompt_tours, state["destination"], "tours",
-                                            traveler_type=traveler_type, travel_party=travel_party, constraint=constraint)
-            tours = parse_tours_output(tours_text)
-
-            # Alerts
-            alerts_text = self._call_gemini(self.prompt_alerts, state["destination"], "alerts")
-            alerts = parse_alerts_output(alerts_text)
-
-            # Events
-            events_text = self._call_gemini(self.prompt_events, state["destination"], "events")
-            events = parse_events_output(events_text)
-
-            # Locations
-            locations_text = self._call_gemini(self.prompt_locations, state["destination"], "locations")
-            locations = parse_locations_output(locations_text)
-
-            # News
-            news_text = self._call_gemini(self.prompt_news, state["destination"], "news")
-            news = parse_news_output(news_text)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=len(sub_calls)) as executor:
+                futures = {
+                    executor.submit(self._call_gemini, prompt, destination, service, **kwargs): (service, parser)
+                    for service, (prompt, kwargs, parser) in sub_calls.items()
+                }
+                for future in concurrent.futures.as_completed(futures):
+                    service, parser = futures[future]
+                    results[service] = parser(future.result())
 
             return {
                 "tour_summary": {
-                    "tours": tours,
-                    "alerts": alerts,
-                    "events": events,
-                    "locations": locations,
-                    "news": news
+                    "tours": results["tours"],
+                    "alerts": results["alerts"],
+                    "events": results["events"],
+                    "locations": results["locations"],
+                    "news": results["news"],
                 }
             }
 

@@ -1,7 +1,6 @@
 #rag/visa_rag.py
-import os
 from datetime import datetime
-from rag.pinecone_embeddings import embed_texts
+from rag.pinecone_embeddings import embed_texts, get_pinecone_client
 
 # -------------------------------
 # Config
@@ -13,12 +12,10 @@ _index = None
 
 
 def _get_index():
-    """Lazily connect to Pinecone so Demo mode never needs credentials/network."""
+    """Lazily connect to Pinecone (via the shared client) so Demo mode never needs credentials/network."""
     global _index
     if _index is None:
-        from pinecone import Pinecone
-        pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
-        _index = pc.Index(PINECONE_INDEX, host=PINECONE_HOST)
+        _index = get_pinecone_client().Index(PINECONE_INDEX, host=PINECONE_HOST)
     return _index
 
 # -------------------------------

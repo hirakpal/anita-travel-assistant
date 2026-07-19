@@ -2,6 +2,7 @@
 import os
 import re
 import requests
+import concurrent.futures
 from prompts.anita_prompt import ANITA_PROMPT
 from prompts.itinerary_prompt import ITINERARY_PROMPT
 from prompts.guide_prompt import VISA_PROMPT, SIM_CURRENCY_PROMPT, LOCAL_TIPS_PROMPT
@@ -269,14 +270,30 @@ class ANITA:
         except Exception as e:
             print(f"⚠️ Visa RAG error: {e!r}")
             visa_info = []
-        if not visa_info:
-            visa_info = self._guide_gemini_fallback(VISA_PROMPT, "visa_info", destination)
 
         sim_currency_info = results.get("transport", {}).get("utility_insights", [])
-        if not sim_currency_info:
-            sim_currency_info = self._guide_gemini_fallback(SIM_CURRENCY_PROMPT, "sim_currency_info", destination)
 
-        local_tips = self._guide_gemini_fallback(LOCAL_TIPS_PROMPT, "tips", destination)
+        # Local tips always needs a Gemini call; visa/SIM only need one if
+        # their RAG lookup came back empty. Run whichever are needed
+        # concurrently instead of one-at-a-time.
+        fallback_tasks = {"local_tips": (LOCAL_TIPS_PROMPT, "tips")}
+        if not visa_info:
+            fallback_tasks["visa"] = (VISA_PROMPT, "visa_info")
+        if not sim_currency_info:
+            fallback_tasks["sim_currency"] = (SIM_CURRENCY_PROMPT, "sim_currency_info")
+
+        fallback_results = {}
+        with concurrent.futures.ThreadPoolExecutor(max_workers=len(fallback_tasks)) as executor:
+            futures = {
+                executor.submit(self._guide_gemini_fallback, prompt, response_key, destination): name
+                for name, (prompt, response_key) in fallback_tasks.items()
+            }
+            for future in concurrent.futures.as_completed(futures):
+                fallback_results[futures[future]] = future.result()
+
+        visa_info = fallback_results.get("visa", visa_info)
+        sim_currency_info = fallback_results.get("sim_currency", sim_currency_info)
+        local_tips = fallback_results["local_tips"]
 
         video_highlights = []
         seen = set()
@@ -344,20 +361,36 @@ class ANITA:
     def _run_pipeline(self, traveler_type="general", preferences=None):
         results = {}
 
-        self._ensure_video_content(self.state_manager.state.get("destination"))
+        # Step 1: Run core agents concurrently — they're independent of each
+        # other, and each gets its own shallow copy of the input state (agents
+        # mutate-and-return their argument in place, so sharing one dict
+        # across threads would race on shared keys like "vlog_insights").
+        # Video ingestion runs alongside them rather than blocking first.
+        agent_names = [name for name in ["hotel", "food", "tour", "flight", "weather", "transport", "news"]
+                        if self.state_manager.route(name, self.routes)]
+        base_state = dict(self.state_manager.state)
 
-        # Step 1: Run core agents
-        for name in ["hotel", "food", "tour", "flight", "weather", "transport", "news"]:
-            if self.state_manager.route(name, self.routes):
-                output = self.agents[name].run(self.state_manager.state)
-                # Agents mutate and return the same shared state dict, so take a
-                # shallow snapshot before storing it under this agent's key —
-                # otherwise state[name] = output aliases state back into itself
-                # (state["transport"] = state) for any agent whose internal field
-                # name matches its orchestrator key (transport, weather, news).
+        with concurrent.futures.ThreadPoolExecutor(max_workers=len(agent_names) + 1) as executor:
+            ingest_future = executor.submit(self._ensure_video_content, base_state.get("destination"))
+            agent_futures = {
+                executor.submit(self.agents[name].run, dict(base_state)): name
+                for name in agent_names
+            }
+
+            for future in concurrent.futures.as_completed(agent_futures):
+                name = agent_futures[future]
+                try:
+                    output = future.result()
+                except Exception as e:
+                    output = {"error": str(e)}
+                # Shallow snapshot: the agent already operated on its own
+                # isolated state copy, but snapshot anyway for consistency
+                # with the rest of the pipeline (e.g. json-serializability).
                 snapshot = dict(output) if isinstance(output, dict) else output
                 self.state_manager.update(name, snapshot)
                 results[name] = snapshot
+
+            ingest_future.result()  # ensure indexing finishes before the Guide step reads it
 
         # Step 2: Assess impact
         impact_report = self.agents["impact"].assess(results, traveler_type, preferences)
