@@ -70,20 +70,24 @@ with st.sidebar:
             if not network_entries:
                 st.info("No network calls recorded yet.")
             else:
+                # Streamlit doesn't allow nesting an expander inside another
+                # expander (this panel is already one), so each call is a
+                # plain divided section instead of its own expander.
                 for entry in reversed(network_entries):
                     icon = "💾" if entry.get("cache_hit") else ("❌" if entry.get("error") else "🌐")
-                    label = f"{icon} {entry['ts']} — {entry['service']}"
+                    label = f"{icon} **{entry['ts']} — {entry['service']}**"
                     if entry.get("duration_ms") is not None:
                         label += f" ({entry['duration_ms']} ms)"
-                    with st.expander(label):
-                        st.markdown("**Request:**")
-                        st.code(entry.get("request", ""))
-                        if entry.get("error"):
-                            st.markdown("**Error:**")
-                            st.code(entry["error"])
-                        elif "response" in entry:
-                            st.markdown("**Response:**")
-                            st.code(entry["response"])
+                    st.markdown(label)
+                    st.caption("Request")
+                    st.code(entry.get("request", ""))
+                    if entry.get("error"):
+                        st.caption("Error")
+                        st.code(entry["error"])
+                    elif "response" in entry:
+                        st.caption("Response")
+                        st.code(entry["response"])
+                    st.divider()
             st.download_button(
                 "Download persisted network log file",
                 data=get_network_log_file_text(),
