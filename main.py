@@ -3,6 +3,10 @@ import json
 from urllib.parse import urlencode, quote
 import streamlit as st
 import streamlit.components.v1 as components
+
+# Must be the very first Streamlit command in the script.
+st.set_page_config(page_title="ANITA — Boarding Pass", page_icon="🎫", layout="wide")
+
 from utils.audit_trail import (
     log_step, get_recent_entries, get_log_file_text, format_entries_as_text,
     get_recent_network_entries, get_network_log_file_text, format_network_entries_as_text,
@@ -47,7 +51,233 @@ except Exception as e:
         st.code(format_entries_as_text(get_recent_entries()) or "(empty)")
     st.stop()
 
-st.title("✈️ ANITA — Your AI Travel Concierge")
+# ---------------- Theme: "Boarding Pass" — kraft ticket stock, postal red, stamp green ----------------
+THEME_CSS = """
+:root {
+  --ticket-bg: #e7dcc2;
+  --ticket-paper: #f2e9d3;
+  --ticket-ink: #22201a;
+  --ticket-muted: #6c6350;
+  --ticket-line: #c9bb95;
+  --ticket-accent: #c23b2e;
+  --ticket-stamp: #2f6b4f;
+}
+
+html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
+  background: var(--ticket-bg) !important;
+  color: var(--ticket-ink);
+}
+[data-testid="stHeader"] { background: transparent !important; }
+[data-testid="stBottom"], [data-testid="stBottomBlockContainer"],
+[data-testid="stChatInputContainer"], [data-testid="stChatInput"] {
+  background: var(--ticket-bg) !important;
+}
+[data-testid="stChatInputContainer"] { border-top: 2px dashed var(--ticket-line) !important; }
+/* Streamlit wraps stChatInputTextArea in a couple of unlabeled divs that
+   carry their own dark background — caught these via live DOM inspection
+   rather than guessing, since their class names are build-hashed and not
+   stable across versions. Scoped to the bottom bar only. */
+[data-testid="stBottomBlockContainer"] div:has(> [data-testid="stChatInputTextArea"]),
+[data-testid="stBottomBlockContainer"] div:has(textarea) {
+  background: var(--ticket-paper) !important;
+}
+[data-testid="stChatInputTextArea"] { background: transparent !important; color: var(--ticket-ink) !important; }
+/* Serif body copy — scoped to actual text containers only, never to icon-font
+   elements (Streamlit renders its arrows/chevrons as icon-font ligatures on
+   bare <span>/<label> tags; a blanket font-family override there breaks
+   those glyphs into literal text like "arrow_right"). */
+[data-testid="stMarkdownContainer"] p, [data-testid="stMarkdownContainer"] li,
+[data-testid="stCaptionContainer"], [data-testid="stText"],
+.stTextInput input, .stTextArea textarea {
+  font-family: Georgia, "Iowan Old Style", "Palatino Linotype", "Times New Roman", serif;
+}
+
+h1, h2, h3, .stApp [data-testid="stMarkdownContainer"] h1,
+.stApp [data-testid="stMarkdownContainer"] h2, .stApp [data-testid="stMarkdownContainer"] h3 {
+  font-family: -apple-system, "Segoe UI", Arial, sans-serif !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.02em;
+  color: var(--ticket-ink) !important;
+}
+
+/* Sidebar — ticket stub */
+[data-testid="stSidebar"] {
+  background: var(--ticket-paper);
+  border-right: 2px dashed var(--ticket-line);
+}
+[data-testid="stSidebar"] * { color: var(--ticket-ink); }
+
+/* Buttons — rubber-stamp style */
+.stButton > button, .stDownloadButton > button {
+  background: var(--ticket-paper);
+  color: var(--ticket-accent);
+  border: 2px solid var(--ticket-accent) !important;
+  border-radius: 4px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  font-size: 12.5px;
+  padding: 8px 18px;
+  transition: transform .12s ease, background .12s ease, color .12s ease;
+}
+.stButton > button:hover, .stDownloadButton > button:hover {
+  background: var(--ticket-accent);
+  color: var(--ticket-paper) !important;
+  transform: rotate(-1deg);
+}
+button[kind="primary"], [data-testid="baseButton-primary"] {
+  background: var(--ticket-stamp) !important;
+  color: var(--ticket-paper) !important;
+  border: 2px solid var(--ticket-stamp) !important;
+}
+button[kind="primary"]:hover, [data-testid="baseButton-primary"]:hover {
+  background: #244f3a !important;
+  border-color: #244f3a !important;
+}
+
+/* Expanders — ticket cards */
+[data-testid="stExpander"] {
+  background: var(--ticket-paper);
+  border: 1px solid var(--ticket-line) !important;
+  border-radius: 3px;
+  margin-bottom: 10px;
+}
+[data-testid="stExpander"] summary, [data-testid="stExpander"] p {
+  color: var(--ticket-ink) !important;
+  font-weight: 600;
+}
+
+/* Tabs — ticket divider */
+[data-testid="stTabs"] [data-baseweb="tab-list"] {
+  border-bottom: 2px solid var(--ticket-line);
+  gap: 4px;
+}
+[data-testid="stTabs"] button {
+  font-family: -apple-system, "Segoe UI", Arial, sans-serif !important;
+  font-weight: 700 !important;
+  text-transform: uppercase;
+  font-size: 12px;
+  letter-spacing: .05em;
+  color: var(--ticket-muted) !important;
+}
+[data-testid="stTabs"] button[aria-selected="true"] {
+  color: var(--ticket-accent) !important;
+  border-bottom: 3px solid var(--ticket-accent) !important;
+}
+
+/* Chat */
+[data-testid="stChatMessage"] {
+  background: var(--ticket-paper);
+  border: 1px solid var(--ticket-line);
+  border-radius: 6px;
+}
+[data-testid="stChatInput"] textarea {
+  background: var(--ticket-paper) !important;
+  border: 1px solid var(--ticket-line) !important;
+  color: var(--ticket-ink) !important;
+}
+
+/* Metrics — ticket-stub numbers */
+[data-testid="stMetricValue"] {
+  color: var(--ticket-accent) !important;
+  font-family: -apple-system, "Segoe UI", Arial, sans-serif !important;
+  font-weight: 800 !important;
+}
+[data-testid="stMetricLabel"] {
+  color: var(--ticket-muted) !important;
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: .06em;
+}
+
+/* Alerts */
+.stAlert { border-radius: 3px; }
+
+/* Inputs */
+.stTextInput input, .stTextArea textarea, .stSelectbox div[data-baseweb="select"] > div {
+  background: var(--ticket-paper) !important;
+  border: 1px solid var(--ticket-line) !important;
+  color: var(--ticket-ink) !important;
+}
+
+/* Dividers */
+hr { border-color: var(--ticket-line) !important; }
+
+/* Masthead banner */
+.boarding-pass-header {
+  display: flex;
+  background: var(--ticket-paper);
+  border: 1px solid var(--ticket-line);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 22px;
+}
+.bp-main {
+  flex: 1;
+  padding: 18px 24px;
+}
+.bp-main .eyebrow {
+  font-family: -apple-system, "Segoe UI", Arial, sans-serif;
+  font-size: 11px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--ticket-muted);
+  margin-bottom: 6px;
+}
+.bp-main .title {
+  font-family: -apple-system, "Segoe UI", Arial, sans-serif;
+  font-weight: 800;
+  font-size: 26px;
+  letter-spacing: .01em;
+  color: var(--ticket-ink);
+  margin-bottom: 4px;
+}
+.bp-main .sub {
+  font-family: Georgia, serif;
+  font-size: 14.5px;
+  color: var(--ticket-muted);
+}
+.bp-stub {
+  width: 150px;
+  border-left: 2px dashed var(--ticket-line);
+  padding: 18px 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: #ece0c4;
+}
+.bp-stub .rot {
+  writing-mode: vertical-rl;
+  font-family: -apple-system, "Segoe UI", Arial, sans-serif;
+  font-size: 10px;
+  letter-spacing: .16em;
+  color: var(--ticket-muted);
+  text-transform: uppercase;
+}
+.bp-stub .code {
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-size: 11px;
+  color: var(--ticket-stamp);
+  font-weight: 700;
+}
+"""
+st.markdown(f"<style>{THEME_CSS}</style>", unsafe_allow_html=True)
+
+st.markdown("""
+<div class="boarding-pass-header">
+  <div class="bp-main">
+    <div class="eyebrow">Boarding Pass · AI Travel Concierge</div>
+    <div class="title">✈️ ANITA</div>
+    <div class="sub">Your itinerary, coordinated by nine specialist agents — grounded in real reviews, real transcripts, real maps.</div>
+  </div>
+  <div class="bp-stub">
+    <span class="rot">ANITA · TRIP</span>
+    <span class="code">PNR 4B7Q1</span>
+  </div>
+</div>
+""", unsafe_allow_html=True)
 
 with st.sidebar:
     with st.expander("📋 Audit Trail"):
@@ -383,7 +613,7 @@ else:
             feedback = st.text_area("Your feedback", key="revision_feedback", placeholder="e.g. I'd like cheaper hotels, or fewer activities on Day 2...")
             col_submit, col_cancel = st.columns(2)
             with col_submit:
-                if st.button("📨 Submit Feedback & Rebuild") and feedback.strip():
+                if st.button("📨 Submit Feedback & Rebuild", type="primary") and feedback.strip():
                     with st.spinner("Rebuilding your itinerary based on your feedback..."):
                         revision_result = anita.revise_itinerary(feedback.strip(), traveler_type=trip.get("traveler_type", "general"))
                     if revision_result.get("needs_clarification"):
@@ -406,7 +636,7 @@ else:
             st.info("Review the details below (Flights, Hotels, Transport, Activities, Culinary, Guide), then approve or request changes.")
             col_approve, col_reject = st.columns(2)
             with col_approve:
-                if st.button("✅ Approve Itinerary"):
+                if st.button("✅ Approve Itinerary", type="primary"):
                     itinerary_summary = {
                         "origin": trip.get("origin"), "destination": trip.get("destination"), "dates": trip.get("dates"),
                         "hotel": next((h.get("name") for h in results.get("hotel", {}).get("hotels", [])), None),
