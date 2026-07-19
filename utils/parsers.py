@@ -1,6 +1,39 @@
 import re
+import json
 from typing import List
 from utils.models import Alert, Event, Location, News
+
+
+def _extract_json_list(raw_text: str, wrapper_keys):
+    """
+    Gemini is asked to "return strictly in JSON format", often wrapped in a
+    ```json ... ``` code fence and/or nested under a wrapper key (e.g.
+    {"destination": ..., "news": [...]}). Try to pull out the actual list of
+    items; return None if the text isn't JSON at all so callers can fall
+    back to plain-text parsing.
+    """
+    text = raw_text.strip()
+    if text.startswith("```"):
+        text = re.sub(r"^```[a-zA-Z]*\n?", "", text)
+        text = re.sub(r"```\s*$", "", text)
+
+    try:
+        data = json.loads(text)
+    except (json.JSONDecodeError, ValueError):
+        return None
+
+    if isinstance(data, list):
+        return data
+    if isinstance(data, dict):
+        for key in wrapper_keys:
+            if isinstance(data.get(key), list):
+                return data[key]
+        # Fall back to the first list-valued field in the object
+        for value in data.values():
+            if isinstance(value, list):
+                return value
+        return [data]
+    return None
 
 def parse_booking_output(raw_text: str):
     """
@@ -264,13 +297,29 @@ def parse_tours_output(raw_text: str) -> List[dict]:
 
 def parse_alerts_output(raw_text: str) -> List[dict]:
     alerts = []
-    chunks = raw_text.split("\n")
-    for chunk in chunks:
+
+    items = _extract_json_list(raw_text, wrapper_keys=["alerts", "advisories"])
+    if items is not None:
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            try:
+                alert = Alert(
+                    type=item.get("type", "General"),
+                    message=item.get("message", ""),
+                    severity=item.get("severity"),
+                )
+                alerts.append(alert.dict())
+            except Exception as e:
+                print(f"⚠️ Alert parse error: {e!r}")
+        return alerts
+
+    # Fallback: not JSON, treat each non-empty line as one alert
+    for chunk in raw_text.split("\n"):
         if not chunk.strip():
             continue
-        parsed = {"type": "General", "message": chunk.strip(), "severity": None}
         try:
-            alert = Alert(**parsed)
+            alert = Alert(type="General", message=chunk.strip(), severity=None)
             alerts.append(alert.dict())
         except Exception as e:
             print(f"⚠️ Alert parse error: {e!r}")
@@ -278,13 +327,32 @@ def parse_alerts_output(raw_text: str) -> List[dict]:
 
 def parse_events_output(raw_text: str) -> List[dict]:
     events = []
-    chunks = raw_text.split("\n\n")
-    for chunk in chunks:
+
+    items = _extract_json_list(raw_text, wrapper_keys=["events"])
+    if items is not None:
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            try:
+                event = Event(
+                    name=item.get("name", "Event"),
+                    date=item.get("date"),
+                    location=item.get("location"),
+                    description=item.get("description"),
+                    price_range=item.get("price_range"),
+                    reviews=item.get("reviews"),
+                )
+                events.append(event.dict())
+            except Exception as e:
+                print(f"⚠️ Event parse error: {e!r}")
+        return events
+
+    # Fallback: not JSON, treat each paragraph as one event
+    for chunk in raw_text.split("\n\n"):
         if not chunk.strip():
             continue
-        parsed = {"name": chunk.split("\n")[0], "date": None, "location": None, "description": chunk}
         try:
-            event = Event(**parsed)
+            event = Event(name=chunk.split("\n")[0], date=None, location=None, description=chunk)
             events.append(event.dict())
         except Exception as e:
             print(f"⚠️ Event parse error: {e!r}")
@@ -292,13 +360,31 @@ def parse_events_output(raw_text: str) -> List[dict]:
 
 def parse_locations_output(raw_text: str) -> List[dict]:
     locations = []
-    chunks = raw_text.split("\n\n")
-    for chunk in chunks:
+
+    items = _extract_json_list(raw_text, wrapper_keys=["locations"])
+    if items is not None:
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            try:
+                location = Location(
+                    name=item.get("name", "Location"),
+                    type=item.get("type", "Landmark"),
+                    opening_hours=item.get("opening_hours"),
+                    price_range=item.get("price_range"),
+                    reviews=item.get("reviews"),
+                )
+                locations.append(location.dict())
+            except Exception as e:
+                print(f"⚠️ Location parse error: {e!r}")
+        return locations
+
+    # Fallback: not JSON, treat each paragraph as one location
+    for chunk in raw_text.split("\n\n"):
         if not chunk.strip():
             continue
-        parsed = {"name": chunk.split("\n")[0], "type": "Landmark", "opening_hours": None, "price_range": None}
         try:
-            location = Location(**parsed)
+            location = Location(name=chunk.split("\n")[0], type="Landmark", opening_hours=None, price_range=None)
             locations.append(location.dict())
         except Exception as e:
             print(f"⚠️ Location parse error: {e!r}")
@@ -306,13 +392,30 @@ def parse_locations_output(raw_text: str) -> List[dict]:
 
 def parse_news_output(raw_text: str) -> List[dict]:
     news_items = []
-    chunks = raw_text.split("\n\n")
-    for chunk in chunks:
+
+    items = _extract_json_list(raw_text, wrapper_keys=["news"])
+    if items is not None:
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            try:
+                news = News(
+                    headline=item.get("headline", "News"),
+                    source=item.get("source"),
+                    date=item.get("date"),
+                    summary=item.get("summary"),
+                )
+                news_items.append(news.dict())
+            except Exception as e:
+                print(f"⚠️ News parse error: {e!r}")
+        return news_items
+
+    # Fallback: not JSON, treat each paragraph as one news item
+    for chunk in raw_text.split("\n\n"):
         if not chunk.strip():
             continue
-        parsed = {"headline": chunk.split("\n")[0], "source": None, "date": None, "summary": chunk}
         try:
-            news = News(**parsed)
+            news = News(headline=chunk.split("\n")[0], source=None, date=None, summary=chunk)
             news_items.append(news.dict())
         except Exception as e:
             print(f"⚠️ News parse error: {e!r}")
