@@ -350,9 +350,33 @@ def parse_flights_output(text: str) -> list[dict]:
 
 
 def parse_tours_output(raw_text: str) -> List[dict]:
+    """
+    Parse tour_agent's Gemini response (asked to return strict JSON per
+    TOUR_PROMPT) into the shape main.py's Activities tab expects: title,
+    location, price, rating, popularity, duration. Falls back to treating
+    each paragraph as one tour if Gemini didn't return JSON.
+    """
+    items = _extract_json_list(raw_text, wrapper_keys=["tours"])
+    if items is not None:
+        tours = []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            tours.append({
+                "title": item.get("title", "Activity"),
+                "location": item.get("location"),
+                "price": item.get("price", item.get("price_range", "N/A")),
+                "rating": item.get("rating", "N/A"),
+                "popularity": item.get("popularity", "🔥 Popular"),
+                "duration": item.get("duration"),
+                "accessibility_notes": item.get("accessibility_notes"),
+            })
+        if tours:
+            return tours
+
+    # Fallback: not JSON, treat each paragraph as one tour
     tours = []
-    chunks = raw_text.split("\n\n")
-    for chunk in chunks:
+    for chunk in raw_text.split("\n\n"):
         if not chunk.strip():
             continue
         tours.append({

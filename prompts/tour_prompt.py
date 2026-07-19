@@ -16,4 +16,12 @@ Tone & Style:
 - Enthusiastic and inspiring.
 - Highlight cultural immersion and memorable experiences.
 - Keep recommendations practical and actionable.
+
+Output Format (strict):
+Return ONLY a JSON object, no prose before or after, shaped exactly like:
+{
+  "tours": [
+    {"title": "...", "location": "...", "price": "$/$$/$$$", "rating": 4.5, "popularity": "short highlight", "duration": "3 hours", "accessibility_notes": "..."}
+  ]
+}
 """

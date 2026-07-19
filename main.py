@@ -163,6 +163,12 @@ with tab_disruptions:
             with col2:
                 if st.button("Keep Original Plan"):
                     st.warning("🛑 Original plan retained. Risks acknowledged.")
+        else:
+            st.success(f"✅ No major risks detected (risk level: {alerts.get('risk_level', 'Unknown')}).")
+            if alerts.get("weather"):
+                st.write(f"🌦️ Weather: {alerts['weather']}")
+            if alerts.get("political"):
+                st.write(f"🏛️ Political/local: {alerts['political']}")
 
 # ---------------- PROACTIVE ALERTS TAB ----------------
 with tab_alerts:
@@ -171,6 +177,16 @@ with tab_alerts:
         st.warning("🌦️ Demo Alert: Simulated rain forecast → Indoor activity suggested.")
     else:
         weather = results.get("weather", {})
-        if weather.get("forecast") == "Rain":
+        forecast_text = str(weather.get("forecast", ""))
+        advisories_text = str(weather.get("advisories", ""))
+
+        shown_alert = False
+        if "rain" in forecast_text.lower() or "rain" in advisories_text.lower():
             st.warning("🌦️ Rain forecast detected → Suggest indoor museum instead of outdoor walk.")
-        st.warning("🚧 Road closure detected → Suggest alternate transport route.")
+            shown_alert = True
+        if weather.get("advisories") and weather["advisories"] != "No major advisories":
+            st.info(f"ℹ️ {weather['advisories']}")
+            shown_alert = True
+
+        if not shown_alert:
+            st.success("✅ No proactive alerts right now — conditions look normal for your trip.")
