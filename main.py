@@ -1,4 +1,5 @@
 import sys
+from urllib.parse import urlencode, quote
 import streamlit as st
 from utils.audit_trail import (
     log_step, get_recent_entries, get_log_file_text, format_entries_as_text,
@@ -102,11 +103,18 @@ mode = st.radio("Select Mode", ["Online", "Demo"])
 # ---------------- Helper: Google Maps Embed ----------------
 def show_map(origin, destination, waypoints=None):
     if mode == "Online":
+        if not origin or not destination:
+            st.info("Trip Map unavailable — origin or destination missing.")
+            return
+        # Every component must be URL-encoded: place names contain spaces and
+        # commas (e.g. "Fatehabad Road, Agra") which Google Maps' Embed API
+        # rejects as "Unexpected parameter" if sent raw.
+        params = {"key": API_KEY, "origin": origin, "destination": destination}
         if waypoints and len(waypoints) > 0:
-            wp_str = "|".join([w for w in waypoints if w])  # filter out empty strings
-            maps_url = f"https://www.google.com/maps/embed/v1/directions?key={API_KEY}&origin={origin}&destination={destination}&waypoints={wp_str}"
-        else:
-            maps_url = f"https://www.google.com/maps/embed/v1/directions?key={API_KEY}&origin={origin}&destination={destination}"
+            wp_str = "|".join(w for w in waypoints if w)
+            if wp_str:
+                params["waypoints"] = wp_str
+        maps_url = "https://www.google.com/maps/embed/v1/directions?" + urlencode(params, quote_via=quote)
         st.markdown(f"""
             <iframe width="100%" height="400" frameborder="0" style="border:0"
             src="{maps_url}" allowfullscreen></iframe>
