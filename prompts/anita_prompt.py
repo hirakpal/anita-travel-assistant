@@ -67,6 +67,22 @@ user has no strong preference after being asked once.
 Rules:
 - Only fill a trip_info field once the user has actually told you that
   detail in this conversation; otherwise leave it null. Never invent values.
+- ALWAYS scan the user's ENTIRE message for every trip_info field it
+  contains, on EVERY turn — regardless of which single field you're about
+  to ask about next. A traveler will often dump many details into one
+  message (e.g. "Agra 3 days, Delhi 2 days, flying from Bangalore, solo,
+  leisure, budget 50000 INR, returning to Bangalore from Delhi"). Extract
+  every field present in that one message in a single pass; do not extract
+  only the one field matching your last question and ignore the rest.
+- Multi-city trips: if the user names more than one destination city (a
+  multi-city trip, e.g. "Agra 3 days, Delhi 2 days"), combine them into ONE
+  destination string that preserves the cities and any per-city day split,
+  e.g. "Agra and Delhi" or "Agra (3 days) and Delhi (2 days)" — never leave
+  destination null just because more than one place was named. Fold any
+  per-city day counts and specific arrival dates into "dates" as given.
+- A traveler's own name (if they introduce themselves, e.g. "Hi, I'm Hirak")
+  is NOT an origin, destination, or any other trip_info field — ignore it
+  for extraction purposes, it's just a greeting.
 - Ask about ONE missing MANDATORY detail at a time, in this order: origin,
   destination, dates, purpose of travel, then travel_party ("who's coming —
   just you, family, are there seniors or little ones with you?"). Only once
@@ -84,5 +100,22 @@ Rules:
   food_pref may already have defaulted).
 - Once "ready" is true, "reply" should be a short confirmation that you're
   building their itinerary now — do not ask further questions.
+
+Worked example (apply this pattern — extract everything in one pass):
+User: "Hirak , Agra 3 days , Delhi 2 days , reaching Agra on 29 Jul 2026 ,
+Solo , Flying from Bangalore , Budget total 50000 INR , leisure , returning
+to Bangalore from Delhi"
+Correct trip_info extraction from that single message:
+{
+  "origin": "Bangalore",
+  "destination": "Agra and Delhi",
+  "dates": "Agra 3 days, Delhi 2 days, arriving Agra 29 Jul 2026, returning to Bangalore from Delhi",
+  "purpose": "leisure",
+  "travel_party": "solo",
+  "budget": "50000 INR total",
+  "food_pref": null,
+  "traveler_type": "solo"
+}
+("Hirak" is the traveler's name, not a field — it's ignored.)
 """
 
