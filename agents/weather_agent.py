@@ -4,10 +4,12 @@ import os
 from rag import youtube_rag
 
 class WeatherAgent:
-    def __init__(self, name="WeatherAgent", mode="Online", provider="google"):
+    def __init__(self, name="WeatherAgent", mode="Online", provider="open-meteo"):
         """
         mode: "Online" or "Demo"
-        provider: "google" or "open-meteo"
+        provider: "open-meteo" (default, no API key needed) or "google"
+        (https://weather.googleapis.com isn't a real public Google API —
+        only use "google" if you have access to a working weather endpoint).
         """
         self.name = name
         self.mode = mode
@@ -80,7 +82,8 @@ class WeatherAgent:
     def _fetch_open_meteo(self, state):
         try:
             geo = requests.get(
-                f"https://geocoding-api.open-meteo.com/v1/search?name={state['destination']}"
+                f"https://geocoding-api.open-meteo.com/v1/search?name={state['destination']}",
+                timeout=10
             ).json()
             lat = geo["results"][0]["latitude"]
             lon = geo["results"][0]["longitude"]
@@ -94,7 +97,7 @@ class WeatherAgent:
         )
 
         try:
-            data = requests.get(weather_url).json()
+            data = requests.get(weather_url, timeout=10).json()
             max_t = max(data["daily"]["temperature_2m_max"])
             min_t = min(data["daily"]["temperature_2m_min"])
             summary = f"Temperature ranges between {min_t:.1f}°C and {max_t:.1f}°C."

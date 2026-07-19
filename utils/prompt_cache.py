@@ -22,7 +22,7 @@ import requests
 
 GEMINI_CACHE_URL = "https://generativelanguage.googleapis.com/v1beta/cachedContents"
 DEFAULT_TTL_SECONDS = 3600
-DEFAULT_MODEL = "models/gemini-1.5-flash-001"
+DEFAULT_MODEL = "models/gemini-1.5-flash"
 
 _handles = {}  # prompt_hash -> {"name": str, "expires_at": float}
 _hits = 0
@@ -57,7 +57,7 @@ def get_cached_system_handle(agent_name: str, system_prompt: str, model: str = D
     try:
         resp = requests.post(
             GEMINI_CACHE_URL,
-            headers={"Authorization": f"Bearer {api_key}"},
+            params={"key": api_key},
             json={
                 "model": model,
                 "systemInstruction": {"parts": [{"text": system_prompt}]},

@@ -51,8 +51,8 @@ class FlightAgent:
             # instead of being re-transmitted on every call.
             body = build_gemini_request(self.name, prompt, text)
             resp = requests.post(
-                "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent",
-                headers={"Authorization": f"Bearer {api_key}"},
+                "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent",
+                params={"key": api_key},
                 json=body,
                 timeout=15
             )
