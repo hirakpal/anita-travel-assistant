@@ -1,6 +1,7 @@
 #rag/visa_rag.py
 import os
 from datetime import datetime
+from rag.pinecone_embeddings import embed_texts
 
 # -------------------------------
 # Config
@@ -9,7 +10,6 @@ PINECONE_INDEX = "visa-requirements"
 PINECONE_HOST = "https://travis-ai-0ctdsv7.svc.aped-4627-b74a.pinecone.io"
 
 _index = None
-_embedder = None
 
 
 def _get_index():
@@ -20,15 +20,6 @@ def _get_index():
         pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
         _index = pc.Index(PINECONE_INDEX, host=PINECONE_HOST)
     return _index
-
-
-def _get_embedder():
-    """Lazily load the embedding model so Demo mode never needs it installed."""
-    global _embedder
-    if _embedder is None:
-        from sentence_transformers import SentenceTransformer
-        _embedder = SentenceTransformer("all-MiniLM-L6-v2")
-    return _embedder
 
 # -------------------------------
 # Filters
@@ -61,7 +52,7 @@ def add_requirements(entries, mode="Online"):
         return
 
     texts = [f"{e['country']} {e['visa_type']} {e['requirements']}" for e in valid_entries]
-    vectors = _get_embedder().encode(texts, batch_size=8).tolist()
+    vectors = embed_texts(texts, input_type="passage")
 
     upserts = []
     for e, vec in zip(valid_entries, vectors):
@@ -96,7 +87,7 @@ def query_requirements(country, visa_type="tourist", top_k=3, mode="Online"):
         }
 
     query_text = f"{country} {visa_type} visa requirements"
-    query_vector = _get_embedder().encode([query_text])[0].tolist()
+    query_vector = embed_texts([query_text], input_type="query")[0]
 
     results = _get_index().query(vector=query_vector, top_k=top_k, include_metadata=True)
     return results

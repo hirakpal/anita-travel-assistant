@@ -20,6 +20,7 @@ from utils.semantic_cache import semantic_call
 from utils.cache import call_api
 from utils.prompt_cache import build_gemini_request
 from rag import visa_rag
+from rag.youtube_ingest import ingest_destination_videos
 from utils.parsers import extract_json_object
 
 # Mandatory trip details gathered conversationally, in the order Anita asks
@@ -278,8 +279,12 @@ class ANITA:
         local_tips = self._guide_gemini_fallback(LOCAL_TIPS_PROMPT, "tips", destination)
 
         video_highlights = []
+        seen = set()
         for key in ("hotel", "food", "transport", "flight", "weather"):
-            video_highlights.extend(results.get(key, {}).get("vlog_insights", []))
+            for insight in results.get(key, {}).get("vlog_insights", []):
+                if insight not in seen:
+                    seen.add(insight)
+                    video_highlights.append(insight)
 
         return {
             "visa": visa_info,
@@ -312,8 +317,34 @@ class ANITA:
             print(f"⚠️ Guide fallback error ({response_key}): {e!r}")
             return []
 
+    def _ensure_video_content(self, destination):
+        """
+        Index real travel-vlog transcripts for this destination (via
+        SearchAPI.io) the first time it's ever requested, so every agent's
+        query_videos() call this run — and the Guide tab's video rollup —
+        has genuine content to find instead of an empty Pinecone index.
+        Cached forever (ttl=None) per destination so we never re-ingest.
+        """
+        if self.mode == "Demo" or not destination:
+            return
+
+        def _do_ingest():
+            try:
+                count = ingest_destination_videos(destination)
+                print(f"📹 Indexed {count} travel videos for {destination}")
+            except Exception as e:
+                print(f"⚠️ Video ingestion error: {e!r}")
+            return {"done": True}
+
+        try:
+            call_api(f"youtube_ingest:{destination}", {"destination": destination}, fetch_fn=_do_ingest, ttl=None)
+        except Exception as e:
+            print(f"⚠️ Video ingestion cache error: {e!r}")
+
     def _run_pipeline(self, traveler_type="general", preferences=None):
         results = {}
+
+        self._ensure_video_content(self.state_manager.state.get("destination"))
 
         # Step 1: Run core agents
         for name in ["hotel", "food", "tour", "flight", "weather", "transport", "news"]:

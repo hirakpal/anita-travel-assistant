@@ -1,6 +1,7 @@
 #rag/youtube_rag.py
 import os
 from datetime import datetime
+from rag.pinecone_embeddings import embed_texts
 
 # -------------------------------
 # Config
@@ -9,7 +10,6 @@ PINECONE_INDEX = "youtube-travel-blogs"
 PINECONE_HOST = "https://travis-ai-0ctdsv7.svc.aped-4627-b74a.pinecone.io"
 
 _index = None
-_embedder = None
 
 
 def _get_index():
@@ -21,21 +21,12 @@ def _get_index():
         _index = pc.Index(PINECONE_INDEX, host=PINECONE_HOST)
     return _index
 
-
-def _get_embedder():
-    """Lazily load the embedding model so Demo mode never needs it installed."""
-    global _embedder
-    if _embedder is None:
-        from sentence_transformers import SentenceTransformer
-        _embedder = SentenceTransformer("all-MiniLM-L6-v2")
-    return _embedder
-
 # -------------------------------
 # Filters
 # -------------------------------
 def _is_valid_video(video):
     """Apply freshness + popularity filters."""
-    if video.get("views", 0) < 50000:
+    if video.get("views", 0) < 1000:
         return False
     upload_date = video.get("upload_date")
     if not upload_date:
@@ -67,7 +58,7 @@ def add_videos_to_index(videos, mode="Online"):
         f"{v['title']} {v['description']} {v.get('transcript','')}"
         for v in valid_videos
     ]
-    vectors = _get_embedder().encode(texts, batch_size=8).tolist()
+    vectors = embed_texts(texts, input_type="passage")
 
     # Upsert into Pinecone
     upserts = []
@@ -82,7 +73,10 @@ def add_videos_to_index(videos, mode="Online"):
                 "tags": v.get("tags", []),
                 "creator": v["creator"],
                 "views": v["views"],
-                "upload_date": str(v["upload_date"])
+                "upload_date": str(v["upload_date"]),
+                # Real spoken-content excerpt so summarize_results() can surface
+                # an actual highlight instead of just the title/tags.
+                "transcript_excerpt": (v.get("transcript") or "")[:500],
             }
         ))
     _get_index().upsert(upserts)
@@ -107,7 +101,7 @@ def query_videos(destination, interests, top_k=5, mode="Online"):
         }
 
     query_text = f"{destination} travel {', '.join(interests)}"
-    query_vector = _get_embedder().encode([query_text])[0].tolist()
+    query_vector = embed_texts([query_text], input_type="query")[0]
 
     results = _get_index().query(vector=query_vector, top_k=top_k, include_metadata=True)
     return results
@@ -128,8 +122,11 @@ def summarize_results(results, mode="Online"):
     insights = []
     for match in results.get("matches", []):
         meta = match.get("metadata", {})
-        insights.append(
-            f"🎥 {meta.get('title')} ({meta.get('creator')}) — "
-            f"Highlights {meta.get('destination')} with tags {meta.get('tags')}"
-        )
+        excerpt = (meta.get("transcript_excerpt") or "").strip()
+        line = f"🎥 **{meta.get('title')}** ({meta.get('creator')})"
+        if excerpt:
+            # Trim to a clean sentence-ish boundary so it doesn't cut off mid-word
+            snippet = excerpt[:220].rsplit(" ", 1)[0]
+            line += f": “{snippet}...”"
+        insights.append(line)
     return insights

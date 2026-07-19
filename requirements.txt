@@ -30,8 +30,7 @@ python-dateutil==2.9.0.post0
 # Typing support
 typing-extensions==4.12.2
 
-# Vector database for RAG
-pinecone-client==3.2.2
-
-# Embedding model for RAG
-sentence-transformers==3.0.1
+# Vector database for RAG. Pinned to 5.x for pc.inference.embed() (hosted
+# embeddings matching the existing indexes' llama-text-embed-v2 model) —
+# 3.2.2 predates that API; 6.0.0+ renames the package to `pinecone`.
+pinecone-client==5.0.1
