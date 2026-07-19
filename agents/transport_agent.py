@@ -60,8 +60,12 @@ class TransportAgent:
                 print(f"⚠️ Gemini API error: {e!r}")
                 state["transport"] = [{"error": "Unable to fetch transport options from Gemini"}]
 
-        # Append SIM/Currency RAG insights
-        rag_results = sim_currency_rag.query_entries(state["destination"], ["transport"], mode=self.mode)
-        state["utility_insights"] = sim_currency_rag.summarize_results(rag_results, mode=self.mode)
+        # Append SIM/Currency RAG insights (never let a RAG failure crash the agent)
+        try:
+            rag_results = sim_currency_rag.query_entries(state["destination"], ["transport"], mode=self.mode)
+            state["utility_insights"] = sim_currency_rag.summarize_results(rag_results, mode=self.mode)
+        except Exception as e:
+            print(f"⚠️ RAG error: {e!r}")
+            state["utility_insights"] = []
 
         return state

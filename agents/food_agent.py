@@ -53,8 +53,12 @@ class FoodAgent:
                 print(f"⚠️ Gemini API error: {e!r}")
                 state["restaurants"] = [{"error": "Unable to fetch restaurants from Gemini"}]
 
-        # Append YouTube RAG insights
-        rag_results = youtube_rag.query_videos(state["destination"], ["food"], mode=self.mode)
-        state["vlog_insights"] = youtube_rag.summarize_results(rag_results, mode=self.mode)
+        # Append YouTube RAG insights (never let a RAG failure crash the agent)
+        try:
+            rag_results = youtube_rag.query_videos(state["destination"], ["food"], mode=self.mode)
+            state["vlog_insights"] = youtube_rag.summarize_results(rag_results, mode=self.mode)
+        except Exception as e:
+            print(f"⚠️ RAG error: {e!r}")
+            state["vlog_insights"] = []
 
         return state

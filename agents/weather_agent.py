@@ -35,9 +35,13 @@ class WeatherAgent:
         else:
             state = self._fetch_open_meteo(state)
 
-        # Append YouTube RAG insights
-        rag_results = youtube_rag.query_videos(state["destination"], ["weather"], mode=self.mode)
-        state["vlog_insights"] = youtube_rag.summarize_results(rag_results, mode=self.mode)
+        # Append YouTube RAG insights (never let a RAG failure crash the agent)
+        try:
+            rag_results = youtube_rag.query_videos(state["destination"], ["weather"], mode=self.mode)
+            state["vlog_insights"] = youtube_rag.summarize_results(rag_results, mode=self.mode)
+        except Exception as e:
+            print(f"⚠️ RAG error: {e!r}")
+            state["vlog_insights"] = []
 
         return state
 
