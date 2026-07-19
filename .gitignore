@@ -2,3 +2,4 @@
 __pycache__/
 *.pyc
 anita_cache.sqlite3
+audit_trail.log

@@ -24,6 +24,7 @@ from rag import visa_rag
 from rag import youtube_rag
 from rag.youtube_ingest import ingest_destination_videos
 from utils.parsers import extract_json_object
+from utils.audit_trail import log_step
 
 # Mandatory trip details gathered conversationally, in the order Anita asks
 # for them. Nothing is "ready" until all of these are known.
@@ -425,7 +426,11 @@ class ANITA:
                 name = agent_futures[future]
                 try:
                     output = future.result()
+                    has_error = isinstance(output, dict) and "error" in output
+                    log_step(f"agent:{name}", "error" if has_error else "success",
+                              detail=output.get("error") if has_error else None)
                 except Exception as e:
+                    log_step(f"agent:{name}", "error", error=e)
                     output = {"error": str(e)}
                 # Shallow snapshot: the agent already operated on its own
                 # isolated state copy, but snapshot anyway for consistency
@@ -434,11 +439,21 @@ class ANITA:
                 self.state_manager.update(name, snapshot)
                 results[name] = snapshot
 
-            ingest_future.result()  # ensure indexing finishes before the Guide step reads it
+            try:
+                ingest_future.result()  # ensure indexing finishes before the Guide step reads it
+                log_step("video_ingestion", "success")
+            except Exception as e:
+                log_step("video_ingestion", "error", error=e)
 
         # Step 2: Assess impact
-        impact_report = self.agents["impact"].assess(results, traveler_type, preferences)
-        results["impact_assessment"] = impact_report.dict()
+        log_step("impact_assessment", "start")
+        try:
+            impact_report = self.agents["impact"].assess(results, traveler_type, preferences)
+            results["impact_assessment"] = impact_report.dict()
+            log_step("impact_assessment", "success")
+        except Exception as e:
+            log_step("impact_assessment", "error", error=e)
+            raise
 
         # Step 3: Build narrative
         narrative = []
@@ -454,10 +469,22 @@ class ANITA:
         results["impact_narrative"] = " ".join(narrative) if narrative else "Your itinerary looks balanced and well‑suited."
 
         # Step 3.5: Build a day-by-day timeline from the real options above
-        results["timeline"] = self._build_timeline(results)
+        log_step("timeline_build", "start")
+        try:
+            results["timeline"] = self._build_timeline(results)
+            log_step("timeline_build", "success")
+        except Exception as e:
+            log_step("timeline_build", "error", error=e)
+            raise
 
         # Step 3.6: Build the traveler Guide (Visa, SIM/currency, video highlights)
-        results["guide"] = self._build_guide(results)
+        log_step("guide_build", "start")
+        try:
+            results["guide"] = self._build_guide(results)
+            log_step("guide_build", "success")
+        except Exception as e:
+            log_step("guide_build", "error", error=e)
+            raise
 
         # Step 4: Apply alternates into state
         if self.routes:
@@ -488,7 +515,14 @@ class ANITA:
             f"food_pref={state.get('food_pref')} traveler_type={traveler_type} "
             f"preferences={preferences} mode={self.mode}"
         )
-        return semantic_call(query_text, lambda: self._run_pipeline(traveler_type, preferences), threshold=0.95)
+        log_step("orchestrate", "start", detail=f"destination={state.get('destination')} mode={self.mode}")
+        try:
+            result = semantic_call(query_text, lambda: self._run_pipeline(traveler_type, preferences), threshold=0.95)
+            log_step("orchestrate", "success")
+            return result
+        except Exception as e:
+            log_step("orchestrate", "error", error=e)
+            raise
 
     def revise_itinerary(self, feedback: str, traveler_type="general", preferences=None):
         """

@@ -1,9 +1,27 @@
 import sys
 import streamlit as st
-from orchestrator.anita import ANITA
-from utils.cache import get_cache_stats
-from utils.semantic_cache import get_semantic_cache_stats
-from utils.prompt_cache import get_prompt_cache_stats
+from utils.audit_trail import log_step, get_recent_entries, get_log_file_text, format_entries_as_text
+
+# Imported first and wrapped in try/except so an import-time crash (missing
+# package, bad env var, etc.) shows its full traceback directly on the page
+# instead of only in Streamlit Cloud's "Manage app" logs, which aren't
+# always available to us.
+log_step("startup:import_core_modules", "start")
+try:
+    from orchestrator.anita import ANITA
+    from utils.cache import get_cache_stats
+    from utils.semantic_cache import get_semantic_cache_stats
+    from utils.prompt_cache import get_prompt_cache_stats
+    log_step("startup:import_core_modules", "success")
+except Exception as e:
+    log_step("startup:import_core_modules", "error", error=e)
+    st.error("🚨 Startup failed while importing core modules.")
+    st.exception(e)
+    with st.expander("📋 Audit trail (this run)", expanded=True):
+        st.code(format_entries_as_text(get_recent_entries()) or "(empty)")
+    with st.expander("📋 Audit trail (persisted log file, across reruns)"):
+        st.code(get_log_file_text())
+    st.stop()
 
 # Avoid UnicodeEncodeError when agents print emoji on Windows consoles (cp1252)
 if hasattr(sys.stdout, "reconfigure"):
@@ -11,9 +29,32 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 # Secure API key from secrets
-API_KEY = st.secrets["GOOGLE_MAPS_API_KEY"]
+log_step("startup:read_secrets", "start")
+try:
+    API_KEY = st.secrets["GOOGLE_MAPS_API_KEY"]
+    log_step("startup:read_secrets", "success")
+except Exception as e:
+    log_step("startup:read_secrets", "error", error=e)
+    st.error("🚨 Startup failed while reading st.secrets['GOOGLE_MAPS_API_KEY'] — is it set in the app's Secrets?")
+    st.exception(e)
+    with st.expander("📋 Audit trail (this run)", expanded=True):
+        st.code(format_entries_as_text(get_recent_entries()) or "(empty)")
+    st.stop()
 
 st.title("✈️ ANITA — Your AI Travel Concierge")
+
+with st.sidebar:
+    with st.expander("📋 Audit Trail"):
+        st.caption("Every startup/pipeline step this run, for diagnosing issues without Cloud logs.")
+        if st.button("Refresh"):
+            st.rerun()
+        st.code(format_entries_as_text(get_recent_entries()) or "(empty)")
+        st.download_button(
+            "Download persisted log file",
+            data=get_log_file_text(),
+            file_name="audit_trail.log",
+            mime="text/plain",
+        )
 
 # Mode toggle (only Online and Demo)
 mode = st.radio("Select Mode", ["Online", "Demo"])
@@ -186,8 +227,15 @@ if user_message:
 
     if ready and st.session_state.results is None:
         with st.spinner("Building your itinerary — coordinating with Hotel, Food, Tour, Flight, Weather, Transport, and News agents..."):
-            st.session_state.results = anita.orchestrate(traveler_type=trip.get("traveler_type", "general"))
-            st.session_state.approval_state = "pending"
+            try:
+                st.session_state.results = anita.orchestrate(traveler_type=trip.get("traveler_type", "general"))
+                st.session_state.approval_state = "pending"
+            except Exception as e:
+                st.error("🚨 Building the itinerary failed — see details below instead of a silent timeout.")
+                st.exception(e)
+                with st.expander("📋 Audit trail (this run)", expanded=True):
+                    st.code(format_entries_as_text(get_recent_entries()) or "(empty)")
+                st.stop()
 
     st.rerun()
 
