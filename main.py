@@ -1,140 +1,96 @@
-import streamlit as st
+import pytest
 from orchestrator.anita import ANITA
+from agents.hotel_agent import HotelAgent
+from agents.food_agent import FoodAgent
+from agents.tour_agent import TourAgent
+from agents.flight_agent import FlightAgent
+from utils.cache import call_api, savings_percent
+from utils.token_tracker import log_tokens
+from rag.youtube_rag import filter_videos
 
-# Secure API key from secrets
-API_KEY = st.secrets["GOOGLE_MAPS_API_KEY"]
+# ----------------------------
+# Agent Output Validation
+# ----------------------------
 
-# Mode toggle (only Online and Demo)
-mode = st.radio("Select Mode", ["Online", "Demo"])
+def test_hotel_agent_output():
+    agent = HotelAgent("HotelAgent")
+    state = {"destination": "Rome"}
+    result = agent.run(state)
+    assert "hotels" in result
+    assert isinstance(result["hotels"], list)
 
-# ---------------- Helper: Google Maps Embed ----------------
-def show_map(origin, destination, waypoints=None):
-    if mode == "Online":
-        if waypoints and len(waypoints) > 0:
-            wp_str = "|".join([w for w in waypoints if w])  # filter out empty strings
-            maps_url = f"https://www.google.com/maps/embed/v1/directions?key={API_KEY}&origin={origin}&destination={destination}&waypoints={wp_str}"
-        else:
-            maps_url = f"https://www.google.com/maps/embed/v1/directions?key={API_KEY}&origin={origin}&destination={destination}"
-        st.markdown(f"""
-            <iframe width="100%" height="400" frameborder="0" style="border:0"
-            src="{maps_url}" allowfullscreen></iframe>
-        """, unsafe_allow_html=True)
-    elif mode == "Demo":
-        st.success(f"🎬 Demo Mode: Simulated route {origin} → {destination} with waypoints {waypoints}")
+def test_food_agent_output():
+    agent = FoodAgent("FoodAgent")
+    state = {"destination": "Rome", "food_pref": "vegetarian"}
+    result = agent.run(state)
+    assert "food" in result
+    assert isinstance(result["food"], list)
 
-# ---------------- Helper: Suggestion Card ----------------
-def suggestion_card(icon, title, price, rating, popularity, distance=None, duration=None, cuisine=None):
-    st.markdown(f"""
-    {icon} **{title}**  
-    💰 Price: {price}  
-    ⭐ Popularity: {popularity} (Rating: {rating})  
-    {f"🚶 Distance: {distance} | ⏱️ Time: {duration}" if distance and duration else ""}  
-    {f"🍴 Cuisine: {cuisine}" if cuisine else ""}
-    """)
+def test_tour_agent_output():
+    agent = TourAgent("TourAgent")
+    state = {"destination": "Rome"}
+    result = agent.run(state)
+    assert "tours" in result
+    assert isinstance(result["tours"], list)
 
-# ---------------- Initialize ANITA ----------------
-initial_state = {
-    "origin": "Bengaluru",
-    "destination": "Jaipur",
-    "arrival_time": "2026-07-20T18:00:00",
-    "departure_time": "2026-07-20T06:00:00"
-}
+def test_flight_agent_output():
+    agent = FlightAgent("FlightAgent")
+    state = {"origin": "Delhi", "destination": "Rome"}
+    result = agent.run(state)
+    assert "flights" in result
+    assert isinstance(result["flights"], list)
 
-anita = ANITA(initial_state, mode=mode)
-results = anita.orchestrate(traveler_type="general")
+# ----------------------------
+# Orchestration Logic
+# ----------------------------
 
-# ---------------- Tabs ----------------
-tab_itinerary, tab_flights, tab_hotels, tab_transport, tab_activities, tab_culinary, tab_disruptions, tab_alerts = st.tabs(
-    ["Itinerary", "Flights", "Hotels", "Transport", "Activities", "Culinary", "Disruptions", "Proactive Alerts"]
-)
+def test_anita_orchestration():
+    anita = ANITA()
+    state = {"destination": "Rome", "budget": "mid-range"}
+    results = anita.orchestrate(state)
+    assert "hotel" in results
+    assert "food" in results
+    assert "tour" in results
+    assert "flight" in results
 
-# ---------------- ITINERARY TAB ----------------
-with tab_itinerary:
-    st.header("Itinerary Overview")
-    st.write(f"Mode: {mode}")
-    show_map(initial_state["origin"], initial_state["destination"])
+# ----------------------------
+# Resilience & Error Handling
+# ----------------------------
 
-# ---------------- FLIGHTS TAB ----------------
-with tab_flights:
-    st.header("Flights")
-    flights = results.get("flight", {}).get("flights", [])
-    if flights:
-        for f in flights:
-            suggestion_card("✈️", f.get("airline", "Unknown"), f.get("price_range", "N/A"),
-                            f.get("reviews", {}).get("rating", "N/A"),
-                            f.get("constraint_applied", ""))
-    show_map(initial_state["origin"], initial_state["destination"])
+def test_missing_destination():
+    agent = HotelAgent("HotelAgent")
+    state = {}
+    result = agent.run(state)
+    assert "error" in result
 
-# ---------------- HOTELS TAB ----------------
-with tab_hotels:
-    st.header("Hotels")
-    hotels = results.get("hotel", {}).get("hotels", [])
-    if hotels:
-        for h in hotels:
-            suggestion_card("🏨", h.get("name", "Unknown"), h.get("price", "N/A"),
-                            h.get("rating", "N/A"), h.get("popularity", ""))
-    show_map(initial_state["destination"], hotels[0]["name"] if hotels else "Jaipur Hotel")
+def test_api_fallback():
+    response = call_api("google_maps", {"origin":"Rome","dest":"Vatican"})
+    cached_response = call_api("google_maps", {"origin":"Rome","dest":"Vatican"})  # cache hit
+    assert response == cached_response
 
-# ---------------- TRANSPORT TAB ----------------
-with tab_transport:
-    st.header("Transport")
-    transport = results.get("transport", {}).get("options", [])
-    if transport:
-        for t in transport:
-            suggestion_card("🚖", t.get("name", "Transport"), t.get("price", "N/A"),
-                            t.get("rating", "N/A"), t.get("popularity", ""),
-                            distance=t.get("distance"), duration=t.get("duration"))
-    show_map("ITC Rajputana Jaipur", "Amber Fort Jaipur")
+# ----------------------------
+# RAG Pipeline
+# ----------------------------
 
-# ---------------- ACTIVITIES TAB ----------------
-with tab_activities:
-    st.header("Activities")
-    tours = results.get("tour", {}).get("tour_summary", {}).get("tours", [])
-    if tours:
-        for t in tours:
-            suggestion_card("🎯", t.get("title", "Activity"), t.get("price", "N/A"),
-                            t.get("rating", "N/A"), t.get("popularity", "🔥 Popular"))
-    if tours:
-        show_map(tours[0].get("location", "Amber Fort Jaipur"), tours[-1].get("location", "Hawa Mahal Jaipur"))
+def test_youtube_rag_filter():
+    videos = [
+        {"id":"1","views":60000,"upload_date":"2026-06-01"},
+        {"id":"2","views":40000,"upload_date":"2026-06-01"}
+    ]
+    filtered = filter_videos(videos)
+    assert len(filtered) == 1
+    assert filtered[0]["id"] == "1"
 
-# ---------------- CULINARY TAB ----------------
-with tab_culinary:
-    st.header("Culinary")
-    cuisine_filter = st.selectbox("Cuisine Preference", ["Any", "Vegetarian", "Vegan", "Street Food", "Fine Dining"])
-    foods = results.get("food", {}).get("restaurants", [])
-    if foods:
-        for f in foods:
-            suggestion_card("🍽️", f.get("name", "Restaurant"), f.get("price", "N/A"),
-                            f.get("rating", "N/A"), f.get("popularity", ""),
-                            distance=f.get("distance"), duration=f.get("duration"), cuisine=cuisine_filter)
-    show_map("Amber Fort Jaipur", "Laxmi Misthan Bhandar Jaipur")
+# ----------------------------
+# Efficiency Tracking
+# ----------------------------
 
-# ---------------- DISRUPTIONS TAB ----------------
-with tab_disruptions:
-    st.header("Disruption Alerts")
-    alerts = results.get("impact_assessment", {}).get("risk", {})
-    if mode == "Demo":
-        st.error("🚨 Demo Disruption: Flight simulated delay")
-        st.success("✅ Demo Alternative Approved")
-    else:
-        if alerts.get("risk_level") == "High":
-            st.error("🚨 High risk detected in itinerary")
-            col1, col2 = st.columns(2)
-            with col1:
-                if st.button("Approve Alternate Plan"):
-                    st.success("✅ Approved. Itinerary updated.")
-                    st.info("♻️ Realignment triggered.")
-            with col2:
-                if st.button("Keep Original Plan"):
-                    st.warning("🛑 Original plan retained. Risks acknowledged.")
+def test_token_logging():
+    tracker = {"tokens_used": 0}
+    log_tokens(100, 50, tracker)
+    assert tracker["tokens_used"] >= 150
 
-# ---------------- PROACTIVE ALERTS TAB ----------------
-with tab_alerts:
-    st.header("Proactive Alerts")
-    if mode == "Demo":
-        st.warning("🌦️ Demo Alert: Simulated rain forecast → Indoor activity suggested.")
-    else:
-        weather = results.get("weather", {})
-        if weather.get("forecast") == "Rain":
-            st.warning("🌦️ Rain forecast detected → Suggest indoor museum instead of outdoor walk.")
-        st.warning("🚧 Road closure detected → Suggest alternate transport route.")
+def test_cache_savings():
+    call_api("maps", {"origin":"Rome","dest":"Vatican"})
+    call_api("maps", {"origin":"Rome","dest":"Vatican"})  # cache hit
+    assert savings_percent() > 0
