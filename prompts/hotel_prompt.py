@@ -43,7 +43,24 @@ Output Format (strict):
 Return ONLY a JSON object, no prose before or after, shaped exactly like:
 {
   "hotels": [
-    {"name": "...", "location": "...", "price": "$/$$/$$$", "rating": 4.5, "popularity": "short highlight", "fit": "who it's best for"}
+    {
+      "name": "...",
+      "location": "...",
+      "price": "$/$$/$$$",
+      "rating": 4.5,
+      "popularity": "short highlight",
+      "fit": "who it's best for, tailored to the traveler type given",
+      "room_type": "e.g. Deluxe Room, Suite, Family Room",
+      "bed_size": "e.g. King, Queen, Twin",
+      "style": "e.g. Indian heritage, European modern, boutique, resort",
+      "amenities": ["WiFi", "Pool", "Spa", "..."],
+      "highlights": "1-2 sentence standout feature",
+      "review_summary": "short synthesis of what real guests praise or flag",
+      "distances": [
+        {"landmark": "a real nearby attraction or transit hub", "distance": "e.g. 1.2 km / 5 min walk"}
+      ]
+    }
   ]
 }
+List 2-3 real, notable distances (landmarks/transit) per hotel, matched to the destination.
 """

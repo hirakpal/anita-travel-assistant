@@ -43,6 +43,67 @@ def suggestion_card(icon, title, price, rating, popularity, distance=None, durat
     {f"🍴 Cuisine: {cuisine}" if cuisine else ""}
     """)
 
+# ---------------- Helper: Interactive Cards (click to reveal traveler-DNA details) ----------------
+def hotel_card(h):
+    if "raw_output" in h or "error" in h:
+        suggestion_card("🏨", h.get("name", "Unknown"), h.get("price", "N/A"), h.get("rating", "N/A"), h.get("popularity", ""))
+        return
+    with st.expander(f"🏨 {h.get('name', 'Unknown')} — {h.get('price', 'N/A')} · ⭐ {h.get('rating', 'N/A')}"):
+        if h.get("highlights"):
+            st.write(f"✨ {h['highlights']}")
+        room_bits = [b for b in [h.get("room_type"), h.get("bed_size"), h.get("style")] if b]
+        if room_bits:
+            st.write(f"🛏️ **Room:** {' · '.join(room_bits)}")
+        if h.get("amenities"):
+            st.write(f"🧳 **Amenities:** {', '.join(h['amenities'])}")
+        if h.get("review_summary"):
+            st.write(f"📝 **Guest reviews:** {h['review_summary']}")
+        if h.get("distances"):
+            st.write("📍 **Distance to key spots:**")
+            for d in h["distances"]:
+                st.write(f"- {d.get('landmark', '')}: {d.get('distance', '')}")
+        if h.get("fit"):
+            st.info(f"✅ **Why this fits you:** {h['fit']}")
+
+def food_card(f, cuisine_filter):
+    if "raw_output" in f or "error" in f:
+        suggestion_card("🍽️", f.get("name", "Restaurant"), f.get("price", "N/A"), f.get("rating", "N/A"),
+                         f.get("popularity", ""), distance=f.get("distance"), duration=f.get("duration"), cuisine=cuisine_filter)
+        return
+    with st.expander(f"🍽️ {f.get('name', 'Restaurant')} — {f.get('price', 'N/A')} · ⭐ {f.get('rating', 'N/A')}"):
+        if f.get("cuisine"):
+            st.write(f"🍴 **Cuisine:** {f['cuisine']}")
+        if f.get("distance") and f.get("duration"):
+            st.write(f"🚶 **Distance:** {f['distance']} | ⏱️ {f['duration']}")
+        if f.get("specialties"):
+            st.write(f"⭐ **Must-try:** {', '.join(f['specialties'])}")
+        if f.get("ambiance"):
+            st.write(f"🎭 **Ambiance:** {f['ambiance']}")
+        if f.get("dietary_options"):
+            st.write(f"🥗 **Dietary options:** {', '.join(f['dietary_options'])}")
+        if f.get("review_summary"):
+            st.write(f"📝 **Diner reviews:** {f['review_summary']}")
+        if f.get("fit"):
+            st.info(f"✅ **Why this fits you:** {f['fit']}")
+
+def tour_card(t):
+    if "raw_output" in t or "error" in t or "description" in t:
+        suggestion_card("🎯", t.get("title", "Activity"), t.get("price", "N/A"), t.get("rating", "N/A"), t.get("popularity", "🔥 Popular"))
+        return
+    with st.expander(f"🎯 {t.get('title', 'Activity')} — {t.get('price', 'N/A')} · ⭐ {t.get('rating', 'N/A')}"):
+        if t.get("what_to_expect"):
+            st.write(f"📖 **What to expect:** {t['what_to_expect']}")
+        if t.get("duration"):
+            st.write(f"⏱️ **Duration:** {t['duration']}")
+        if t.get("best_time"):
+            st.write(f"🕒 **Best time to go:** {t['best_time']}")
+        if t.get("accessibility_notes"):
+            st.write(f"♿ **Accessibility:** {t['accessibility_notes']}")
+        if t.get("tips"):
+            st.write(f"💡 **Tip:** {t['tips']}")
+        if t.get("fit"):
+            st.info(f"✅ **Why this fits you:** {t['fit']}")
+
 # ---------------- Session state: conversation + ANITA instance ----------------
 if "anita" not in st.session_state or st.session_state.get("mode") != mode:
     st.session_state.anita = ANITA({}, mode=mode)
@@ -140,11 +201,16 @@ else:
     # ---------------- HOTELS TAB ----------------
     with tab_hotels:
         st.header("Hotels")
+        st.caption("Click a hotel to see room details, amenities, distances, and why it fits you.")
         hotels = results.get("hotel", {}).get("hotels", [])
         if hotels:
             for h in hotels:
-                suggestion_card("🏨", h.get("name", "Unknown"), h.get("price", "N/A"),
-                                h.get("rating", "N/A"), h.get("popularity", ""))
+                hotel_card(h)
+        hotel_vlogs = results.get("hotel", {}).get("vlog_insights", [])
+        if hotel_vlogs:
+            st.caption("📺 What travelers say (from YouTube)")
+            for v in hotel_vlogs:
+                st.write(f"- {v}")
         show_map(trip.get("destination"), hotels[0].get("name", trip.get("destination")) if hotels else trip.get("destination"))
 
     # ---------------- TRANSPORT TAB ----------------
@@ -161,24 +227,28 @@ else:
     # ---------------- ACTIVITIES TAB ----------------
     with tab_activities:
         st.header("Activities")
+        st.caption("Click an activity to see what to expect, timing tips, and why it fits you.")
         tours = results.get("tour", {}).get("tour_summary", {}).get("tours", [])
         if tours:
             for t in tours:
-                suggestion_card("🎯", t.get("title", "Activity"), t.get("price", "N/A"),
-                                t.get("rating", "N/A"), t.get("popularity", "🔥 Popular"))
+                tour_card(t)
         if tours:
             show_map(tours[0].get("location", trip.get("destination")), tours[-1].get("location", trip.get("destination")))
 
     # ---------------- CULINARY TAB ----------------
     with tab_culinary:
         st.header("Culinary")
+        st.caption("Click a restaurant to see specialties, ambiance, dietary options, and why it fits you.")
         cuisine_filter = st.selectbox("Cuisine Preference", ["Any", "Vegetarian", "Vegan", "Street Food", "Fine Dining"])
         foods = results.get("food", {}).get("restaurants", [])
         if foods:
             for f in foods:
-                suggestion_card("🍽️", f.get("name", "Restaurant"), f.get("price", "N/A"),
-                                f.get("rating", "N/A"), f.get("popularity", ""),
-                                distance=f.get("distance"), duration=f.get("duration"), cuisine=cuisine_filter)
+                food_card(f, cuisine_filter)
+        food_vlogs = results.get("food", {}).get("vlog_insights", [])
+        if food_vlogs:
+            st.caption("📺 What travelers say (from YouTube)")
+            for v in food_vlogs:
+                st.write(f"- {v}")
         show_map(trip.get("destination"), foods[0].get("name", trip.get("destination")) if foods else trip.get("destination"))
 
     # ---------------- DISRUPTIONS TAB ----------------

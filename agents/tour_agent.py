@@ -26,10 +26,14 @@ class TourAgent:
         self.prompt_locations = LOCATIONS_PROMPT
         self.prompt_news = NEWS_PROMPT
 
-    def _call_gemini(self, prompt, destination, service):
+    def _call_gemini(self, prompt, destination, service, traveler_type=None):
+        dynamic_text = f"Destination: {destination}"
+        if traveler_type:
+            dynamic_text += f"\nTraveler type: {traveler_type}"
+
         def _fetch():
             api_key = os.getenv("GOOGLE_API_KEY")
-            body = build_gemini_request(f"{self.name}:{service}", prompt, f"Destination: {destination}")
+            body = build_gemini_request(f"{self.name}:{service}", prompt, dynamic_text)
             resp = requests.post(
                 "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent",
                 params={"key": api_key},
@@ -40,8 +44,8 @@ class TourAgent:
             data = resp.json()
             return data["candidates"][0]["content"]["parts"][0]["text"]
 
-        # Identical destination per sub-call → served from cache, no Gemini tokens spent
-        return call_api(f"gemini:tour:{service}", {"destination": destination}, fetch_fn=_fetch)
+        # Identical destination/traveler_type per sub-call → served from cache, no Gemini tokens spent
+        return call_api(f"gemini:tour:{service}", {"destination": destination, "traveler_type": traveler_type}, fetch_fn=_fetch)
 
     def run(self, state):
         if not state.get("destination"):
@@ -58,9 +62,11 @@ class TourAgent:
                 }
             }
 
+        traveler_type = state.get("traveler_type", "General")
+
         try:
             # Tours
-            tours_text = self._call_gemini(self.prompt_tours, state["destination"], "tours")
+            tours_text = self._call_gemini(self.prompt_tours, state["destination"], "tours", traveler_type=traveler_type)
             tours = parse_tours_output(tours_text)
 
             # Alerts

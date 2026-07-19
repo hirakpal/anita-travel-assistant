@@ -21,7 +21,19 @@ Output Format (strict):
 Return ONLY a JSON object, no prose before or after, shaped exactly like:
 {
   "tours": [
-    {"title": "...", "location": "...", "price": "$/$$/$$$", "rating": 4.5, "popularity": "short highlight", "duration": "3 hours", "accessibility_notes": "..."}
+    {
+      "title": "...",
+      "location": "...",
+      "price": "$/$$/$$$",
+      "rating": 4.5,
+      "popularity": "short highlight",
+      "duration": "3 hours",
+      "accessibility_notes": "...",
+      "fit": "who it's best for, tailored to the traveler type given",
+      "what_to_expect": "1-2 sentence description of the actual experience",
+      "best_time": "e.g. early morning, sunset, weekday afternoons",
+      "tips": "one practical tip (what to bring, book ahead, etc.)"
+    }
   ]
 }
 """

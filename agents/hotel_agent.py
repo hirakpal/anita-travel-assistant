@@ -27,11 +27,12 @@ class HotelAgent:
 
         # ONLINE MODE → Gemini API
         if self.provider == "gemini":
-            profile = state.get("profile", "General")
+            profile = state.get("traveler_type", "General")
+            budget = state.get("budget", "Mid-range")
 
             def _fetch():
                 api_key = os.getenv("GOOGLE_API_KEY")
-                text = f"Destination: {state['destination']}\nTraveler profile: {profile}"
+                text = f"Destination: {state['destination']}\nTraveler type: {profile}\nBudget tier: {budget}"
                 body = build_gemini_request(self.name, self.prompt, text)
                 resp = requests.post(
                     "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent",
@@ -44,8 +45,8 @@ class HotelAgent:
                 return data["candidates"][0]["content"]["parts"][0]["text"]
 
             try:
-                # Identical destination/profile → served from cache, no Gemini tokens spent
-                params = {"destination": state["destination"], "profile": profile}
+                # Identical destination/profile/budget → served from cache, no Gemini tokens spent
+                params = {"destination": state["destination"], "profile": profile, "budget": budget}
                 output_text = call_api("gemini:hotel", params, fetch_fn=_fetch)
                 state["hotels"] = parse_hotels_json_output(output_text)
             except Exception as e:

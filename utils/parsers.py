@@ -76,6 +76,13 @@ def parse_hotels_json_output(raw_text: str) -> List[dict]:
             "rating": item.get("rating", "N/A"),
             "popularity": item.get("popularity", ""),
             "fit": item.get("fit"),
+            "room_type": item.get("room_type"),
+            "bed_size": item.get("bed_size"),
+            "style": item.get("style"),
+            "amenities": item.get("amenities", []),
+            "highlights": item.get("highlights"),
+            "review_summary": item.get("review_summary"),
+            "distances": item.get("distances", []),
         })
     return hotels or [{"raw_output": raw_text}]
 
@@ -98,6 +105,11 @@ def parse_food_json_output(raw_text: str) -> List[dict]:
             "popularity": item.get("popularity", ""),
             "distance": item.get("distance"),
             "duration": item.get("duration"),
+            "fit": item.get("fit"),
+            "specialties": item.get("specialties", []),
+            "ambiance": item.get("ambiance"),
+            "dietary_options": item.get("dietary_options", []),
+            "review_summary": item.get("review_summary"),
         })
     return restaurants or [{"raw_output": raw_text}]
 
@@ -389,6 +401,10 @@ def parse_tours_output(raw_text: str) -> List[dict]:
                 "popularity": item.get("popularity", "🔥 Popular"),
                 "duration": item.get("duration"),
                 "accessibility_notes": item.get("accessibility_notes"),
+                "fit": item.get("fit"),
+                "what_to_expect": item.get("what_to_expect"),
+                "best_time": item.get("best_time"),
+                "tips": item.get("tips"),
             })
         if tours:
             return tours

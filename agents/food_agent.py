@@ -27,11 +27,12 @@ class FoodAgent:
 
         # ONLINE MODE → Gemini API
         if self.provider == "gemini":
-            preferences = state.get("preferences", "General")
+            preferences = state.get("food_pref", "General")
+            traveler_type = state.get("traveler_type", "General")
 
             def _fetch():
                 api_key = os.getenv("GOOGLE_API_KEY")
-                text = f"Destination: {state['destination']}\nFood preferences: {preferences}"
+                text = f"Destination: {state['destination']}\nFood preferences: {preferences}\nTraveler type: {traveler_type}"
                 body = build_gemini_request(self.name, self.prompt, text)
                 resp = requests.post(
                     "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent",
@@ -44,8 +45,8 @@ class FoodAgent:
                 return data["candidates"][0]["content"]["parts"][0]["text"]
 
             try:
-                # Identical destination/preferences → served from cache, no Gemini tokens spent
-                params = {"destination": state["destination"], "preferences": preferences}
+                # Identical destination/preferences/traveler_type → served from cache, no Gemini tokens spent
+                params = {"destination": state["destination"], "preferences": preferences, "traveler_type": traveler_type}
                 output_text = call_api("gemini:food", params, fetch_fn=_fetch)
                 state["restaurants"] = parse_food_json_output(output_text)
             except Exception as e:

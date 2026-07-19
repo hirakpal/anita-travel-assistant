@@ -43,7 +43,20 @@ Output Format (strict):
 Return ONLY a JSON object, no prose before or after, shaped exactly like:
 {
   "restaurants": [
-    {"name": "...", "cuisine": "...", "price": "$/$$/$$$", "rating": 4.5, "popularity": "short highlight", "distance": "1.2 km", "duration": "5 min walk"}
+    {
+      "name": "...",
+      "cuisine": "...",
+      "price": "$/$$/$$$",
+      "rating": 4.5,
+      "popularity": "short highlight",
+      "distance": "1.2 km",
+      "duration": "5 min walk",
+      "fit": "who it's best for, tailored to the traveler type given",
+      "specialties": ["signature dish 1", "signature dish 2"],
+      "ambiance": "e.g. casual, rooftop, fine dining, street-side",
+      "dietary_options": ["Vegetarian", "Vegan", "Gluten-free", "..."],
+      "review_summary": "short synthesis of what real diners praise or flag"
+    }
   ]
 }
 """
