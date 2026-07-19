@@ -5,7 +5,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 # Must be the very first Streamlit command in the script.
-st.set_page_config(page_title="ANITA — Boarding Pass", page_icon="🎫", layout="wide")
+st.set_page_config(page_title="ANITA — Golden Triangle", page_icon="🪔", layout="wide")
 
 from utils.audit_trail import (
     log_step, get_recent_entries, get_log_file_text, format_entries_as_text,
@@ -51,232 +51,205 @@ except Exception as e:
         st.code(format_entries_as_text(get_recent_entries()) or "(empty)")
     st.stop()
 
-# ---------------- Theme: "Boarding Pass" — kraft ticket stock, postal red, stamp green ----------------
+# ---------------- Theme: "Golden Triangle" — indigo night, marigold, peacock, sandstone ----------------
 THEME_CSS = """
 :root {
-  --ticket-bg: #e7dcc2;
-  --ticket-paper: #f2e9d3;
-  --ticket-ink: #22201a;
-  --ticket-muted: #6c6350;
-  --ticket-line: #c9bb95;
-  --ticket-accent: #c23b2e;
-  --ticket-stamp: #2f6b4f;
+  --gt-bg: #171033;
+  --gt-bg-2: #1d1640;
+  --gt-panel: #1e1852;
+  --gt-ink: #fbf3e3;
+  --gt-muted: #b9a8d8;
+  --gt-line: #332766;
+  --gt-accent: #ffa726;
+  --gt-sandstone: #c2603a;
+  --gt-peacock: #12a08a;
 }
 
 html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
-  background: var(--ticket-bg) !important;
-  color: var(--ticket-ink);
+  background: var(--gt-bg) !important;
+  background-image: radial-gradient(circle at 50% 0%, rgba(255,167,38,.08), transparent 55%) !important;
+  color: var(--gt-ink);
+}
+.stApp, .stApp p, .stApp li, .stApp label, .stApp [data-testid="stMarkdownContainer"] {
+  font-family: -apple-system, "Segoe UI", Arial, sans-serif;
 }
 [data-testid="stHeader"] { background: transparent !important; }
 [data-testid="stBottom"], [data-testid="stBottomBlockContainer"],
 [data-testid="stChatInputContainer"], [data-testid="stChatInput"] {
-  background: var(--ticket-bg) !important;
+  background: var(--gt-bg) !important;
 }
-[data-testid="stChatInputContainer"] { border-top: 2px dashed var(--ticket-line) !important; }
+[data-testid="stChatInputContainer"] { border-top: 1px solid var(--gt-line) !important; }
 /* Streamlit wraps stChatInputTextArea in a couple of unlabeled divs that
-   carry their own dark background — caught these via live DOM inspection
-   rather than guessing, since their class names are build-hashed and not
-   stable across versions. Scoped to the bottom bar only. */
+   carry their own dark background — found via live DOM inspection, not
+   guessing, since their class names are build-hashed and unstable. */
 [data-testid="stBottomBlockContainer"] div:has(> [data-testid="stChatInputTextArea"]),
 [data-testid="stBottomBlockContainer"] div:has(textarea) {
-  background: var(--ticket-paper) !important;
+  background: var(--gt-panel) !important;
 }
-[data-testid="stChatInputTextArea"] { background: transparent !important; color: var(--ticket-ink) !important; }
-/* Serif body copy — scoped to actual text containers only, never to icon-font
-   elements (Streamlit renders its arrows/chevrons as icon-font ligatures on
-   bare <span>/<label> tags; a blanket font-family override there breaks
-   those glyphs into literal text like "arrow_right"). */
-[data-testid="stMarkdownContainer"] p, [data-testid="stMarkdownContainer"] li,
-[data-testid="stCaptionContainer"], [data-testid="stText"],
-.stTextInput input, .stTextArea textarea {
-  font-family: Georgia, "Iowan Old Style", "Palatino Linotype", "Times New Roman", serif;
-}
+[data-testid="stChatInputTextArea"] { background: transparent !important; color: var(--gt-ink) !important; }
 
 h1, h2, h3, .stApp [data-testid="stMarkdownContainer"] h1,
 .stApp [data-testid="stMarkdownContainer"] h2, .stApp [data-testid="stMarkdownContainer"] h3 {
   font-family: -apple-system, "Segoe UI", Arial, sans-serif !important;
   font-weight: 800 !important;
-  letter-spacing: 0.02em;
-  color: var(--ticket-ink) !important;
+  letter-spacing: 0.01em;
+  color: var(--gt-ink) !important;
 }
 
-/* Sidebar — ticket stub */
+/* Sidebar */
 [data-testid="stSidebar"] {
-  background: var(--ticket-paper);
-  border-right: 2px dashed var(--ticket-line);
+  background: var(--gt-panel);
+  border-right: 1px solid var(--gt-line);
 }
-[data-testid="stSidebar"] * { color: var(--ticket-ink); }
+[data-testid="stSidebar"] * { color: var(--gt-ink); }
 
-/* Buttons — rubber-stamp style */
+/* Buttons — marigold pill, filled on hover */
 .stButton > button, .stDownloadButton > button {
-  background: var(--ticket-paper);
-  color: var(--ticket-accent);
-  border: 2px solid var(--ticket-accent) !important;
-  border-radius: 4px;
+  background: transparent;
+  color: var(--gt-accent);
+  border: 2px solid var(--gt-accent) !important;
+  border-radius: 20px;
   font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: .06em;
-  font-size: 12.5px;
-  padding: 8px 18px;
+  letter-spacing: .02em;
+  font-size: 13.5px;
+  padding: 8px 20px;
   transition: transform .12s ease, background .12s ease, color .12s ease;
 }
 .stButton > button:hover, .stDownloadButton > button:hover {
-  background: var(--ticket-accent);
-  color: var(--ticket-paper) !important;
-  transform: rotate(-1deg);
+  background: linear-gradient(120deg, var(--gt-accent), var(--gt-sandstone));
+  color: #241000 !important;
+  border-color: transparent !important;
 }
 button[kind="primary"], [data-testid="baseButton-primary"] {
-  background: var(--ticket-stamp) !important;
-  color: var(--ticket-paper) !important;
-  border: 2px solid var(--ticket-stamp) !important;
+  background: var(--gt-peacock) !important;
+  color: #04241d !important;
+  border: 2px solid var(--gt-peacock) !important;
 }
 button[kind="primary"]:hover, [data-testid="baseButton-primary"]:hover {
-  background: #244f3a !important;
-  border-color: #244f3a !important;
+  background: #0d8672 !important;
+  border-color: #0d8672 !important;
 }
 
-/* Expanders — ticket cards */
+/* Expanders — lantern cards */
 [data-testid="stExpander"] {
-  background: var(--ticket-paper);
-  border: 1px solid var(--ticket-line) !important;
-  border-radius: 3px;
-  margin-bottom: 10px;
+  background: linear-gradient(180deg, var(--gt-bg-2), var(--gt-bg));
+  border: 1px solid var(--gt-line) !important;
+  border-radius: 10px 10px 3px 3px;
+  margin-bottom: 12px;
 }
 [data-testid="stExpander"] summary, [data-testid="stExpander"] p {
-  color: var(--ticket-ink) !important;
+  color: var(--gt-ink) !important;
   font-weight: 600;
 }
 
-/* Tabs — ticket divider */
+/* Tabs — marigold underline */
 [data-testid="stTabs"] [data-baseweb="tab-list"] {
-  border-bottom: 2px solid var(--ticket-line);
+  border-bottom: 1px solid var(--gt-line);
   gap: 4px;
 }
 [data-testid="stTabs"] button {
   font-family: -apple-system, "Segoe UI", Arial, sans-serif !important;
   font-weight: 700 !important;
-  text-transform: uppercase;
-  font-size: 12px;
-  letter-spacing: .05em;
-  color: var(--ticket-muted) !important;
+  font-size: 13px;
+  color: var(--gt-muted) !important;
 }
 [data-testid="stTabs"] button[aria-selected="true"] {
-  color: var(--ticket-accent) !important;
-  border-bottom: 3px solid var(--ticket-accent) !important;
+  color: var(--gt-accent) !important;
+  border-bottom: 3px solid var(--gt-accent) !important;
 }
 
-/* Chat */
+/* Chat — pill bubbles */
 [data-testid="stChatMessage"] {
-  background: var(--ticket-paper);
-  border: 1px solid var(--ticket-line);
-  border-radius: 6px;
-}
-[data-testid="stChatInput"] textarea {
-  background: var(--ticket-paper) !important;
-  border: 1px solid var(--ticket-line) !important;
-  color: var(--ticket-ink) !important;
+  background: var(--gt-panel);
+  border: 1px solid var(--gt-line);
+  border-radius: 16px;
 }
 
-/* Metrics — ticket-stub numbers */
+/* Metrics */
 [data-testid="stMetricValue"] {
-  color: var(--ticket-accent) !important;
+  color: var(--gt-accent) !important;
   font-family: -apple-system, "Segoe UI", Arial, sans-serif !important;
   font-weight: 800 !important;
 }
 [data-testid="stMetricLabel"] {
-  color: var(--ticket-muted) !important;
+  color: var(--gt-muted) !important;
   text-transform: uppercase;
   font-size: 11px;
   letter-spacing: .06em;
 }
 
 /* Alerts */
-.stAlert { border-radius: 3px; }
+.stAlert { border-radius: 10px; }
 
 /* Inputs */
 .stTextInput input, .stTextArea textarea, .stSelectbox div[data-baseweb="select"] > div {
-  background: var(--ticket-paper) !important;
-  border: 1px solid var(--ticket-line) !important;
-  color: var(--ticket-ink) !important;
+  background: var(--gt-panel) !important;
+  border: 1px solid var(--gt-line) !important;
+  color: var(--gt-ink) !important;
+  border-radius: 10px;
 }
 
 /* Dividers */
-hr { border-color: var(--ticket-line) !important; }
+hr { border-color: var(--gt-line) !important; }
+
+/* Garland divider — marigold / sandstone / peacock string lights */
+.gt-garland { display: flex; gap: 8px; margin: 4px 0 20px; }
+.gt-garland i {
+  width: 8px; height: 8px; border-radius: 50%; display: inline-block;
+  background: var(--gt-accent); box-shadow: 0 0 8px rgba(255,167,38,.7);
+}
+.gt-garland i:nth-child(3n+2) { background: var(--gt-sandstone); box-shadow: 0 0 8px rgba(194,96,58,.6); }
+.gt-garland i:nth-child(3n) { background: var(--gt-peacock); box-shadow: 0 0 8px rgba(18,160,138,.6); }
 
 /* Masthead banner */
-.boarding-pass-header {
-  display: flex;
-  background: var(--ticket-paper);
-  border: 1px solid var(--ticket-line);
-  border-radius: 4px;
+.gt-header {
+  position: relative;
   overflow: hidden;
-  margin-bottom: 22px;
-}
-.bp-main {
-  flex: 1;
-  padding: 18px 24px;
-}
-.bp-main .eyebrow {
-  font-family: -apple-system, "Segoe UI", Arial, sans-serif;
-  font-size: 11px;
-  letter-spacing: .14em;
-  text-transform: uppercase;
-  color: var(--ticket-muted);
+  display: flex;
+  background: linear-gradient(180deg, var(--gt-bg-2), var(--gt-bg));
+  border: 1px solid var(--gt-line);
+  border-radius: 14px;
   margin-bottom: 6px;
 }
-.bp-main .title {
-  font-family: -apple-system, "Segoe UI", Arial, sans-serif;
-  font-weight: 800;
-  font-size: 26px;
-  letter-spacing: .01em;
-  color: var(--ticket-ink);
-  margin-bottom: 4px;
+.gt-header::after {
+  content: ""; position: absolute; top: -40px; right: -40px; width: 160px; height: 160px;
+  border-radius: 50%; background: radial-gradient(circle, rgba(255,167,38,.30), transparent 70%);
 }
-.bp-main .sub {
-  font-family: Georgia, serif;
-  font-size: 14.5px;
-  color: var(--ticket-muted);
+.gt-main { flex: 1; padding: 22px 26px; position: relative; z-index: 1; }
+.gt-main .eyebrow {
+  font-size: 11px; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--gt-peacock); margin-bottom: 8px; font-weight: 700;
 }
-.bp-stub {
-  width: 150px;
-  border-left: 2px dashed var(--ticket-line);
-  padding: 18px 14px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  background: #ece0c4;
+.gt-main .title { font-weight: 800; font-size: 28px; letter-spacing: .01em; color: var(--gt-ink); margin-bottom: 6px; }
+.gt-main .sub { font-size: 14.5px; color: var(--gt-muted); max-width: 60ch; }
+.gt-stub {
+  width: 160px; border-left: 1px solid var(--gt-line); padding: 18px 16px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+  position: relative; z-index: 1;
 }
-.bp-stub .rot {
-  writing-mode: vertical-rl;
-  font-family: -apple-system, "Segoe UI", Arial, sans-serif;
-  font-size: 10px;
-  letter-spacing: .16em;
-  color: var(--ticket-muted);
-  text-transform: uppercase;
+.gt-stub .rot {
+  font-size: 10px; letter-spacing: .16em; color: var(--gt-muted); text-transform: uppercase; font-weight: 700;
 }
-.bp-stub .code {
+.gt-stub .code {
   font-family: ui-monospace, "SF Mono", Consolas, monospace;
-  font-size: 11px;
-  color: var(--ticket-stamp);
-  font-weight: 700;
+  font-size: 12px; color: var(--gt-peacock); font-weight: 700;
 }
 """
 st.markdown(f"<style>{THEME_CSS}</style>", unsafe_allow_html=True)
 
 st.markdown("""
-<div class="boarding-pass-header">
-  <div class="bp-main">
-    <div class="eyebrow">Boarding Pass · AI Travel Concierge</div>
-    <div class="title">✈️ ANITA</div>
-    <div class="sub">Your itinerary, coordinated by nine specialist agents — grounded in real reviews, real transcripts, real maps.</div>
+<div class="gt-header">
+  <div class="gt-main">
+    <div class="eyebrow">Golden Triangle · AI Travel Concierge</div>
+    <div class="title">🪔 ANITA</div>
+    <div class="sub">Namaste — your itinerary, coordinated by nine specialist agents, grounded in real reviews, real transcripts, real maps.</div>
   </div>
-  <div class="bp-stub">
-    <span class="rot">ANITA · TRIP</span>
-    <span class="code">PNR 4B7Q1</span>
+  <div class="gt-stub">
+    <span class="rot">Route</span>
+    <span class="code">DEL → AGR → DEL</span>
   </div>
 </div>
+<div class="gt-garland" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
 """, unsafe_allow_html=True)
 
 with st.sidebar:
