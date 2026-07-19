@@ -5,22 +5,13 @@ from rag import sim_currency_rag
 from prompts.transport_prompt import TRANSPORT_PROMPT
 from utils.cache import call_api
 from utils.prompt_cache import build_gemini_request
+from utils.parsers import parse_transport_json_output
 class TransportAgent:
     def __init__(self, name="TransportAgent", mode="Online", provider="gemini"):
         self.name = name
         self.mode = mode
         self.provider = provider
-        self.prompt = """
-        You are the Transport Agent.
-        Task: Suggest local transport options between hotel, airport, and activities.
-        Include:
-        - Mode (Cab, Metro, Bus, Rental Car)
-        - Duration
-        - Price range
-        - Availability
-        - Reviews (rating + highlights)
-        - Why it fits the user’s profile (budget, convenience, family).
-        """
+        self.prompt = TRANSPORT_PROMPT
 
     def run(self, state):
         if not state.get("origin") or not state.get("destination"):
@@ -54,8 +45,7 @@ class TransportAgent:
                 # Identical origin/destination → served from cache, no Gemini tokens spent
                 params = {"origin": state["origin"], "destination": state["destination"]}
                 output_text = call_api("gemini:transport", params, fetch_fn=_fetch)
-                # For now, store raw Gemini output. Later, parse into structured JSON.
-                state["transport"] = [{"raw_output": output_text}]
+                state["transport"] = parse_transport_json_output(output_text)
             except Exception as e:
                 print(f"⚠️ Gemini API error: {e!r}")
                 state["transport"] = [{"error": "Unable to fetch transport options from Gemini"}]

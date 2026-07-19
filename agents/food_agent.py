@@ -5,6 +5,7 @@ from rag import youtube_rag
 from prompts.food_prompt import FOOD_PROMPT
 from utils.cache import call_api
 from utils.prompt_cache import build_gemini_request
+from utils.parsers import parse_food_json_output
 class FoodAgent:
     def __init__(self, name="FoodAgent", mode="Online", provider="gemini"):
         self.name = name
@@ -46,9 +47,7 @@ class FoodAgent:
                 # Identical destination/preferences → served from cache, no Gemini tokens spent
                 params = {"destination": state["destination"], "preferences": preferences}
                 output_text = call_api("gemini:food", params, fetch_fn=_fetch)
-
-                # For now, store raw Gemini output. Later, parse into structured JSON.
-                state["restaurants"] = [{"raw_output": output_text}]
+                state["restaurants"] = parse_food_json_output(output_text)
             except Exception as e:
                 print(f"⚠️ Gemini API error: {e!r}")
                 state["restaurants"] = [{"error": "Unable to fetch restaurants from Gemini"}]

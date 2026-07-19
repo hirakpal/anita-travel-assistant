@@ -5,6 +5,7 @@ from rag import youtube_rag
 from prompts.hotel_prompt import HOTEL_PROMPT
 from utils.cache import call_api
 from utils.prompt_cache import build_gemini_request
+from utils.parsers import parse_hotels_json_output
 class HotelAgent:
     def __init__(self, name="HotelAgent", mode="Online", provider="gemini"):
         self.name = name
@@ -46,9 +47,7 @@ class HotelAgent:
                 # Identical destination/profile → served from cache, no Gemini tokens spent
                 params = {"destination": state["destination"], "profile": profile}
                 output_text = call_api("gemini:hotel", params, fetch_fn=_fetch)
-
-                # For now, store raw Gemini output. Later, parse into structured JSON.
-                state["hotels"] = [{"raw_output": output_text}]
+                state["hotels"] = parse_hotels_json_output(output_text)
             except Exception as e:
                 print(f"⚠️ Gemini API error: {e!r}")
                 state["hotels"] = [{"error": "Unable to fetch hotels from Gemini"}]

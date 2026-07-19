@@ -35,6 +35,75 @@ def _extract_json_list(raw_text: str, wrapper_keys):
         return [data]
     return None
 
+def parse_hotels_json_output(raw_text: str) -> List[dict]:
+    """
+    Parse hotel_agent's Gemini response (asked to return strict JSON per
+    HOTEL_PROMPT) into the flat shape main.py's Hotels tab expects:
+    name, price, rating, popularity. Falls back to the raw text on failure
+    so the UI still shows something instead of crashing.
+    """
+    items = _extract_json_list(raw_text, wrapper_keys=["hotels"])
+    if items is None:
+        return [{"raw_output": raw_text}]
+
+    hotels = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        hotels.append({
+            "name": item.get("name", "Unknown"),
+            "location": item.get("location"),
+            "price": item.get("price", item.get("price_range", "N/A")),
+            "rating": item.get("rating", "N/A"),
+            "popularity": item.get("popularity", ""),
+            "fit": item.get("fit"),
+        })
+    return hotels or [{"raw_output": raw_text}]
+
+
+def parse_food_json_output(raw_text: str) -> List[dict]:
+    """Parse food_agent's Gemini response into the shape the Culinary tab expects."""
+    items = _extract_json_list(raw_text, wrapper_keys=["restaurants"])
+    if items is None:
+        return [{"raw_output": raw_text}]
+
+    restaurants = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        restaurants.append({
+            "name": item.get("name", "Restaurant"),
+            "cuisine": item.get("cuisine"),
+            "price": item.get("price", item.get("price_range", "N/A")),
+            "rating": item.get("rating", "N/A"),
+            "popularity": item.get("popularity", ""),
+            "distance": item.get("distance"),
+            "duration": item.get("duration"),
+        })
+    return restaurants or [{"raw_output": raw_text}]
+
+
+def parse_transport_json_output(raw_text: str) -> List[dict]:
+    """Parse transport_agent's Gemini response into the shape the Transport tab expects."""
+    items = _extract_json_list(raw_text, wrapper_keys=["transport_options", "transport"])
+    if items is None:
+        return [{"raw_output": raw_text}]
+
+    options = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        options.append({
+            "name": item.get("name", item.get("mode", "Transport")),
+            "price": item.get("price", item.get("price_range", "N/A")),
+            "rating": item.get("rating", "N/A"),
+            "popularity": item.get("popularity", ""),
+            "distance": item.get("distance"),
+            "duration": item.get("duration"),
+        })
+    return options or [{"raw_output": raw_text}]
+
+
 def parse_booking_output(raw_text: str):
     """
     Parse Gemini free-text booking output into structured JSON.
