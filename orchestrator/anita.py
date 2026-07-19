@@ -43,8 +43,14 @@ class ANITA:
             for name in ["hotel", "food", "tour", "flight", "weather", "transport", "news"]:
                 if self.state_manager.route(name, self.routes):
                     output = self.agents[name].run(self.state_manager.state)
-                    self.state_manager.update(name, output)
-                    results[name] = output
+                    # Agents mutate and return the same shared state dict, so take a
+                    # shallow snapshot before storing it under this agent's key —
+                    # otherwise state[name] = output aliases state back into itself
+                    # (state["transport"] = state) for any agent whose internal field
+                    # name matches its orchestrator key (transport, weather, news).
+                    snapshot = dict(output) if isinstance(output, dict) else output
+                    self.state_manager.update(name, snapshot)
+                    results[name] = snapshot
 
             # Step 2: Assess impact
             impact_report = self.agents["impact"].assess(results, traveler_type, preferences)
