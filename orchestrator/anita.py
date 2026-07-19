@@ -1,4 +1,6 @@
 #orchestrator/anita.py
+import os
+import requests
 from prompts.anita_prompt import ANITA_PROMPT
 from orchestrator.state_manager import StateManager
 from agents.hotel_agent import HotelAgent
@@ -12,6 +14,17 @@ from agents.impact_assessment_agent import ImpactAssessmentAgent
 from agents.news_agent import NewsAgent
 from human_agent_integration import HumanAgentIntegration
 from utils.semantic_cache import semantic_call
+from utils.prompt_cache import build_gemini_request
+from utils.parsers import extract_json_object
+
+# Trip details gathered conversationally, in the order Anita asks for them.
+CHAT_SLOTS = [
+    ("origin", "Where are you traveling from?"),
+    ("destination", "Great — and where would you like to go?"),
+    ("dates", "What dates are you traveling (or how many days)?"),
+    ("budget", "What's your budget tier — Budget, Mid-range, or Luxury?"),
+    ("food_pref", "Any food preferences? (e.g. vegetarian, vegan, or just 'Any')"),
+]
 
 class ANITA:
     def __init__(self, initial_state, mode="Online"):
@@ -33,7 +46,82 @@ class ANITA:
         }
 
         # TODO: define self.routes (RouteManager or similar)
-        self.routes = None  
+        self.routes = None
+
+    def chat(self, message: str, history=None):
+        """
+        One conversational turn with Anita. Extracted trip details (origin,
+        destination, dates, budget, food_pref) are merged straight into
+        self.state_manager.state as they're learned.
+
+        Returns (reply_text, ready): ready=True once enough trip info has
+        been gathered to call orchestrate().
+        """
+        if self.mode != "Demo":
+            try:
+                return self._chat_gemini(message, history or [])
+            except Exception as e:
+                print(f"⚠️ Anita chat error: {e!r}")
+        return self._chat_rule_based(message)
+
+    def _chat_gemini(self, message: str, history):
+        api_key = os.getenv("GOOGLE_API_KEY")
+        known = {
+            k: v for k, v in self.state_manager.state.items()
+            if k in ("origin", "destination", "dates", "budget", "food_pref", "traveler_type") and v
+        }
+        convo = "\n".join(f"{turn['role'].capitalize()}: {turn['content']}" for turn in history)
+        dynamic_text = (
+            f"Trip details confirmed so far: {known}\n\n"
+            f"Conversation so far:\n{convo}\n"
+            f"User: {message}"
+        )
+        body = build_gemini_request("ANITA", self.prompt, dynamic_text)
+        resp = requests.post(
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent",
+            params={"key": api_key},
+            json=body,
+            timeout=15
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        text = data["candidates"][0]["content"]["parts"][0]["text"]
+
+        obj = extract_json_object(text)
+        if obj is None:
+            # Gemini didn't return JSON — show it as the reply, but we
+            # can't extract structured fields from it, so keep gathering.
+            return text, False
+
+        for key, value in (obj.get("trip_info") or {}).items():
+            if value:
+                self.state_manager.state[key] = value
+
+        reply = obj.get("reply") or text
+        ready = bool(obj.get("ready", False)) and all(
+            self.state_manager.state.get(k) for k in ("origin", "destination", "dates")
+        )
+        return reply, ready
+
+    def _chat_rule_based(self, message: str):
+        """
+        Deterministic slot-filling used in Demo mode, and as the fallback
+        when the Gemini chat call fails in Online mode — asks one question
+        at a time, no network/API key required.
+        """
+        state = self.state_manager.state
+        message = (message or "").strip()
+
+        pending_slot = next((slot for slot, _ in CHAT_SLOTS if not state.get(slot)), None)
+        if pending_slot and message:
+            state[pending_slot] = message
+
+        next_slot = next(((slot, question) for slot, question in CHAT_SLOTS if not state.get(slot)), None)
+        if next_slot:
+            return next_slot[1], False
+
+        state.setdefault("traveler_type", "general")
+        return "Perfect, I have everything I need! Building your itinerary now...", True
 
     def orchestrate(self, traveler_type="general", preferences=None):
         def _run():

@@ -4,6 +4,14 @@ from typing import List
 from utils.models import Alert, Event, Location, News
 
 
+def _strip_code_fence(raw_text: str) -> str:
+    text = raw_text.strip()
+    if text.startswith("```"):
+        text = re.sub(r"^```[a-zA-Z]*\n?", "", text)
+        text = re.sub(r"```\s*$", "", text)
+    return text
+
+
 def _extract_json_list(raw_text: str, wrapper_keys):
     """
     Gemini is asked to "return strictly in JSON format", often wrapped in a
@@ -12,10 +20,7 @@ def _extract_json_list(raw_text: str, wrapper_keys):
     items; return None if the text isn't JSON at all so callers can fall
     back to plain-text parsing.
     """
-    text = raw_text.strip()
-    if text.startswith("```"):
-        text = re.sub(r"^```[a-zA-Z]*\n?", "", text)
-        text = re.sub(r"```\s*$", "", text)
+    text = _strip_code_fence(raw_text)
 
     try:
         data = json.loads(text)
@@ -34,6 +39,20 @@ def _extract_json_list(raw_text: str, wrapper_keys):
                 return value
         return [data]
     return None
+
+
+def extract_json_object(raw_text: str):
+    """
+    Like _extract_json_list, but for a single JSON object response (e.g.
+    Anita's chat turns: {"reply": ..., "trip_info": {...}, "ready": bool}).
+    Returns None if the text isn't valid JSON.
+    """
+    text = _strip_code_fence(raw_text)
+    try:
+        data = json.loads(text)
+    except (json.JSONDecodeError, ValueError):
+        return None
+    return data if isinstance(data, dict) else None
 
 def parse_hotels_json_output(raw_text: str) -> List[dict]:
     """
