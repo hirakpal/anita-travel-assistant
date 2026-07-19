@@ -1,6 +1,7 @@
 import sys
 import streamlit as st
 from orchestrator.anita import ANITA
+from utils.cache import get_cache_stats
 
 # Avoid UnicodeEncodeError when agents print emoji on Windows consoles (cp1252)
 if hasattr(sys.stdout, "reconfigure"):
@@ -61,6 +62,13 @@ tab_itinerary, tab_flights, tab_hotels, tab_transport, tab_activities, tab_culin
 with tab_itinerary:
     st.header("Itinerary Overview")
     st.write(f"Mode: {mode}")
+
+    cache_stats = get_cache_stats()
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Cache Hits", cache_stats["hits"])
+    col2.metric("Cache Misses", cache_stats["misses"])
+    col3.metric("Token Savings", f"{cache_stats['savings_percent']}%")
+
     show_map(initial_state["origin"], initial_state["destination"])
 
 # ---------------- FLIGHTS TAB ----------------

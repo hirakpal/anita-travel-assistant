@@ -15,8 +15,7 @@ jsonschema==4.22.0
 # Logging (built-in, but structlog adds structured logging if needed)
 structlog==24.1.0
 
-# Caching (optional, if you re‑add cache.py with Redis)
-redis==5.0.4
+# Caching (utils/cache.py — in-memory + SQLite, no extra dependency needed)
 
 # Token tracking / usage monitoring
 tiktoken==0.7.0
