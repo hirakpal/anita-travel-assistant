@@ -109,12 +109,12 @@ with tab_hotels:
         for h in hotels:
             suggestion_card("🏨", h.get("name", "Unknown"), h.get("price", "N/A"),
                             h.get("rating", "N/A"), h.get("popularity", ""))
-    show_map(initial_state["destination"], hotels[0]["name"] if hotels else "Jaipur Hotel")
+    show_map(initial_state["destination"], hotels[0].get("name", "Jaipur Hotel") if hotels else "Jaipur Hotel")
 
 # ---------------- TRANSPORT TAB ----------------
 with tab_transport:
     st.header("Transport")
-    transport = results.get("transport", {}).get("options", [])
+    transport = results.get("transport", {}).get("transport", [])
     if transport:
         for t in transport:
             suggestion_card("🚖", t.get("name", "Transport"), t.get("price", "N/A"),
