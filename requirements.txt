@@ -17,9 +17,6 @@ structlog==24.1.0
 
 # Caching (utils/cache.py — in-memory + SQLite, no extra dependency needed)
 
-# Token tracking / usage monitoring
-tiktoken==0.7.0
-
 # Data handling
 pandas==2.2.2
 
