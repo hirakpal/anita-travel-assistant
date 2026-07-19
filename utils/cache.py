@@ -112,16 +112,28 @@ def call_api(service, params, fetch_fn=None, ttl=3600):
               If omitted, a deterministic stub response is returned/cached
               (useful for tests/demos with no live API).
     ttl:      seconds to keep the cached result (default 1 hour)
+
+    Every call here — cache hit or real fetch — is logged to the audit
+    trail's Network tab, since this is the single chokepoint every agent's
+    Gemini/RAG/API call passes through.
     """
     global _hits, _misses
+    from utils.audit_trail import log_network  # local import: avoid any import-cycle risk
 
     cached = get_cached(service, params)
     if cached is not None:
         _hits += 1
+        log_network(service, params, response=cached, cache_hit=True)
         return cached
 
     _misses += 1
-    value = fetch_fn() if fetch_fn else {"service": service, "params": params}
+    start = time.time()
+    try:
+        value = fetch_fn() if fetch_fn else {"service": service, "params": params}
+    except Exception as e:
+        log_network(service, params, cache_hit=False, duration_ms=(time.time() - start) * 1000, error=e)
+        raise
+    log_network(service, params, response=value, cache_hit=False, duration_ms=(time.time() - start) * 1000)
     set_cached(service, params, value, ttl=ttl)
     return value
 

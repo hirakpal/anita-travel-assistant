@@ -1,6 +1,8 @@
 #rag/visa_rag.py
+import time
 from datetime import datetime
 from rag.pinecone_embeddings import embed_texts, get_pinecone_client
+from utils.audit_trail import log_network
 
 # -------------------------------
 # Config
@@ -84,9 +86,17 @@ def query_requirements(country, visa_type="tourist", top_k=3, mode="Online"):
         }
 
     query_text = f"{country} {visa_type} visa requirements"
-    query_vector = embed_texts([query_text], input_type="query")[0]
-
-    results = _get_index().query(vector=query_vector, top_k=top_k, include_metadata=True)
+    request = {"index": PINECONE_INDEX, "query_text": query_text, "top_k": top_k}
+    start = time.time()
+    try:
+        query_vector = embed_texts([query_text], input_type="query")[0]
+        results = _get_index().query(vector=query_vector, top_k=top_k, include_metadata=True)
+    except Exception as e:
+        log_network(f"pinecone:query:{PINECONE_INDEX}", request, error=e, duration_ms=(time.time() - start) * 1000)
+        raise
+    log_network(f"pinecone:query:{PINECONE_INDEX}", request,
+                response={"matches": len(results.get("matches", []))},
+                duration_ms=(time.time() - start) * 1000)
     return results
 
 # -------------------------------

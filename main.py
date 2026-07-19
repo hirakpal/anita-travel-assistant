@@ -1,6 +1,9 @@
 import sys
 import streamlit as st
-from utils.audit_trail import log_step, get_recent_entries, get_log_file_text, format_entries_as_text
+from utils.audit_trail import (
+    log_step, get_recent_entries, get_log_file_text, format_entries_as_text,
+    get_recent_network_entries, get_network_log_file_text, format_network_entries_as_text,
+)
 
 # Imported first and wrapped in try/except so an import-time crash (missing
 # package, bad env var, etc.) shows its full traceback directly on the page
@@ -48,13 +51,46 @@ with st.sidebar:
         st.caption("Every startup/pipeline step this run, for diagnosing issues without Cloud logs.")
         if st.button("Refresh"):
             st.rerun()
-        st.code(format_entries_as_text(get_recent_entries()) or "(empty)")
-        st.download_button(
-            "Download persisted log file",
-            data=get_log_file_text(),
-            file_name="audit_trail.log",
-            mime="text/plain",
-        )
+
+        tab_steps, tab_network = st.tabs(["Steps", "Network"])
+
+        with tab_steps:
+            st.code(format_entries_as_text(get_recent_entries()) or "(empty)")
+            st.download_button(
+                "Download persisted log file",
+                data=get_log_file_text(),
+                file_name="audit_trail.log",
+                mime="text/plain",
+                key="download_steps_log",
+            )
+
+        with tab_network:
+            st.caption("Request/response between agents and Gemini/Pinecone — what was sent, what came back, cache hits, and timing.")
+            network_entries = get_recent_network_entries()
+            if not network_entries:
+                st.info("No network calls recorded yet.")
+            else:
+                for entry in reversed(network_entries):
+                    icon = "💾" if entry.get("cache_hit") else ("❌" if entry.get("error") else "🌐")
+                    label = f"{icon} {entry['ts']} — {entry['service']}"
+                    if entry.get("duration_ms") is not None:
+                        label += f" ({entry['duration_ms']} ms)"
+                    with st.expander(label):
+                        st.markdown("**Request:**")
+                        st.code(entry.get("request", ""))
+                        if entry.get("error"):
+                            st.markdown("**Error:**")
+                            st.code(entry["error"])
+                        elif "response" in entry:
+                            st.markdown("**Response:**")
+                            st.code(entry["response"])
+            st.download_button(
+                "Download persisted network log file",
+                data=get_network_log_file_text(),
+                file_name="audit_network.log",
+                mime="text/plain",
+                key="download_network_log",
+            )
 
 # Mode toggle (only Online and Demo)
 mode = st.radio("Select Mode", ["Online", "Demo"])
