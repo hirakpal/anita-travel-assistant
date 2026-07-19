@@ -17,19 +17,30 @@ class TransportAgent:
         if not state.get("origin") or not state.get("destination"):
             return {"error": "Origin or destination missing"}
 
-        # DEMO MODE → stubbed transport only
+        # DEMO MODE → rich stubbed transport options showcasing the full schema
         if self.mode == "Demo":
             state["transport"] = [
-                {"mode": "Demo Cab", "duration": "15 min", "price_range": "$10"}
+                {"name": "Demo Metro", "price": "$", "rating": 4.6, "popularity": "Demo: fastest, budget-friendly transit",
+                 "distance": "10 km", "duration": "20 min"},
+                {"name": "Demo Cab (App-based)", "price": "$$", "rating": 4.4, "popularity": "Demo: convenient door-to-door option",
+                 "distance": "12 km", "duration": "25 min"},
+                {"name": "Demo Private Car", "price": "$$$", "rating": 4.7, "popularity": "Demo: most comfortable, best for families/seniors",
+                 "distance": "12 km", "duration": "22 min"},
+                {"name": "Demo Public Bus", "price": "$", "rating": 4.0, "popularity": "Demo: cheapest, scenic route",
+                 "distance": "14 km", "duration": "40 min"},
             ]
-            state["utility_insights"] = ["🎬 Demo SIM info: Prepaid SIM available at airport"]
+            state["utility_insights"] = ["🎬 Demo SIM info: Prepaid SIM available at airport", "🎬 Demo currency info: ATMs widely available"]
             return state
 
         # ONLINE MODE → Gemini API + RAG
         if self.provider == "gemini":
+            constraint = state.get("constraint")
+
             def _fetch():
                 api_key = os.getenv("GOOGLE_API_KEY")
                 text = f"Origin: {state['origin']}\nDestination: {state['destination']}"
+                if constraint:
+                    text += f"\nTraveler feedback to incorporate: {constraint}"
                 body = build_gemini_request(self.name, self.prompt, text)
                 resp = requests.post(
                     "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent",
@@ -42,8 +53,8 @@ class TransportAgent:
                 return data["candidates"][0]["content"]["parts"][0]["text"]
 
             try:
-                # Identical origin/destination → served from cache, no Gemini tokens spent
-                params = {"origin": state["origin"], "destination": state["destination"]}
+                # Identical origin/destination/constraint → served from cache, no Gemini tokens spent
+                params = {"origin": state["origin"], "destination": state["destination"], "constraint": constraint}
                 output_text = call_api("gemini:transport", params, fetch_fn=_fetch)
                 state["transport"] = parse_transport_json_output(output_text)
             except Exception as e:

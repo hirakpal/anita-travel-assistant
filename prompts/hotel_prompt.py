@@ -22,6 +22,12 @@ Core Responsibilities:
      • Solo travelers → budget‑friendly, social hostels, central locations.
      • Adventure travelers → eco‑lodges, proximity to outdoor activities.
    - Respect budget tier and accessibility needs.
+   - Solo female travelers: prioritize hotels in well-lit, secure, well-reviewed
+     areas with 24/7 front desk/security, and call this out in "highlights".
+   - Senior citizens in the travel party: prioritize elevator access, ground-floor
+     or accessible rooms, minimal stairs, and proximity to medical facilities.
+   - Infants/young children in the travel party: prioritize family rooms/cribs,
+     babyproofing, quiet floors away from nightlife, and kid-friendly amenities.
 
 5. Output
    - Return a structured list of hotel options with name, location, amenities, accessibility notes, and price.

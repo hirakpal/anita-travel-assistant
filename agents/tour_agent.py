@@ -26,10 +26,14 @@ class TourAgent:
         self.prompt_locations = LOCATIONS_PROMPT
         self.prompt_news = NEWS_PROMPT
 
-    def _call_gemini(self, prompt, destination, service, traveler_type=None):
+    def _call_gemini(self, prompt, destination, service, traveler_type=None, travel_party=None, constraint=None):
         dynamic_text = f"Destination: {destination}"
         if traveler_type:
             dynamic_text += f"\nTraveler type: {traveler_type}"
+        if travel_party:
+            dynamic_text += f"\nTravel party: {travel_party}"
+        if constraint:
+            dynamic_text += f"\nTraveler feedback to incorporate: {constraint}"
 
         def _fetch():
             api_key = os.getenv("GOOGLE_API_KEY")
@@ -44,29 +48,76 @@ class TourAgent:
             data = resp.json()
             return data["candidates"][0]["content"]["parts"][0]["text"]
 
-        # Identical destination/traveler_type per sub-call → served from cache, no Gemini tokens spent
-        return call_api(f"gemini:tour:{service}", {"destination": destination, "traveler_type": traveler_type}, fetch_fn=_fetch)
+        # Identical inputs per sub-call → served from cache, no Gemini tokens spent
+        params = {"destination": destination, "traveler_type": traveler_type, "travel_party": travel_party, "constraint": constraint}
+        return call_api(f"gemini:tour:{service}", params, fetch_fn=_fetch)
 
     def run(self, state):
         if not state.get("destination"):
             return {"error": "Destination missing"}
 
         if self.mode == "Demo":
+            destination = state["destination"]
             return {
                 "tour_summary": {
-                    "tours": [{"name": "Demo Tour", "type": "Cultural"}],
-                    "alerts": [{"type": "General", "message": "Demo alert"}],
-                    "events": [{"name": "Demo Event"}],
-                    "locations": [{"name": "Demo Location"}],
-                    "news": [{"headline": "Demo News"}]
+                    "tours": [
+                        {
+                            "title": f"{destination} Heritage Walking Tour", "location": f"Old City, {destination}",
+                            "price": "$$", "rating": 4.7, "popularity": "Demo: most-booked cultural tour",
+                            "duration": "3 hours", "accessibility_notes": "Demo: some uneven cobblestone paths",
+                            "fit": "Great for culture lovers and families",
+                            "what_to_expect": "Demo: guided walk through historic landmarks and local markets",
+                            "best_time": "Early morning", "tips": "Demo: wear comfortable shoes",
+                        },
+                        {
+                            "title": f"{destination} Family Adventure Park", "location": f"Adventure Zone, {destination}",
+                            "price": "$$", "rating": 4.5, "popularity": "Demo: top pick for families",
+                            "duration": "4 hours", "accessibility_notes": "Demo: stroller-friendly paths available",
+                            "fit": "Great for families with young children",
+                            "what_to_expect": "Demo: interactive rides and educational exhibits",
+                            "best_time": "Weekday mornings", "tips": "Demo: book tickets online for skip-the-line access",
+                        },
+                        {
+                            "title": f"{destination} Sunset Viewpoint Tour", "location": f"Hilltop, {destination}",
+                            "price": "$", "rating": 4.6, "popularity": "Demo: highly rated scenic experience",
+                            "duration": "2 hours", "accessibility_notes": "Demo: accessible by vehicle, minimal walking",
+                            "fit": "Great for seniors and couples",
+                            "what_to_expect": "Demo: panoramic sunset views with a local guide",
+                            "best_time": "Sunset", "tips": "Demo: bring a light jacket for the evening breeze",
+                        },
+                        {
+                            "title": f"{destination} Solo Explorer Bazaar Tour", "location": f"Market District, {destination}",
+                            "price": "$", "rating": 4.4, "popularity": "Demo: popular with solo travelers",
+                            "duration": "2.5 hours", "accessibility_notes": "Demo: busy, well-lit pedestrian streets",
+                            "fit": "Great for solo travelers, including solo female travelers",
+                            "what_to_expect": "Demo: small-group guided shopping and street food sampling in a well-populated area",
+                            "best_time": "Daytime", "tips": "Demo: small groups only, book ahead",
+                        },
+                    ],
+                    "alerts": [
+                        {"type": "Weather", "message": "Demo: mild weather expected, no major concerns", "severity": "Low"},
+                        {"type": "Local Disruption", "message": "Demo: minor road works near downtown", "severity": "Low"},
+                    ],
+                    "events": [
+                        {"name": "Demo: Local Cultural Festival", "date": None, "location": destination, "description": "Demo event"},
+                    ],
+                    "locations": [
+                        {"name": f"Demo: {destination} Landmark", "type": "Landmark", "opening_hours": "9am-6pm", "price_range": "$"},
+                    ],
+                    "news": [
+                        {"headline": f"Demo: {destination} tourism update", "source": "Demo Source", "date": None, "summary": "Demo summary"},
+                    ],
                 }
             }
 
         traveler_type = state.get("traveler_type", "General")
+        travel_party = state.get("travel_party")
+        constraint = state.get("constraint")
 
         try:
             # Tours
-            tours_text = self._call_gemini(self.prompt_tours, state["destination"], "tours", traveler_type=traveler_type)
+            tours_text = self._call_gemini(self.prompt_tours, state["destination"], "tours",
+                                            traveler_type=traveler_type, travel_party=travel_party, constraint=constraint)
             tours = parse_tours_output(tours_text)
 
             # Alerts

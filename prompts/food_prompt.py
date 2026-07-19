@@ -22,6 +22,12 @@ Core Responsibilities:
      • Solo travelers → vibrant social spots or budget‑friendly options.
      • Adventure travelers → street food, local specialties, immersive experiences.
    - Respect dietary needs and budget tier.
+   - Solo female travelers: prioritize well-lit, busy, well-reviewed venues,
+     especially for evening dining.
+   - Senior citizens in the travel party: prioritize comfortable seating,
+     easy access (no stairs), and quieter, less crowded venues.
+   - Infants/young children in the travel party: prioritize venues with high
+     chairs, quick service, and kid-friendly menu options.
 
 5. Output
    - Return a structured list of food options with name, cuisine type, location, price range, and highlights.

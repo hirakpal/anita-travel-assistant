@@ -21,14 +21,43 @@ from utils.prompt_cache import build_gemini_request
 from rag import visa_rag
 from utils.parsers import extract_json_object
 
-# Trip details gathered conversationally, in the order Anita asks for them.
-CHAT_SLOTS = [
+# Mandatory trip details gathered conversationally, in the order Anita asks
+# for them. Nothing is "ready" until all of these are known.
+MANDATORY_CHAT_SLOTS = [
     ("origin", "Where are you traveling from?"),
     ("destination", "Great — and where would you like to go?"),
     ("dates", "What dates are you traveling (or how many days)?"),
+    ("purpose", "What's the purpose of this trip — leisure, business, a honeymoon, pilgrimage, adventure?"),
+    ("travel_party", "Who's traveling — just you, or with family? Any seniors or infants/young children in the group?"),
+]
+
+# Secondary details — only asked once every mandatory slot above is filled.
+OPTIONAL_CHAT_SLOTS = [
     ("budget", "What's your budget tier — Budget, Mid-range, or Luxury?"),
     ("food_pref", "Any food preferences? (e.g. vegetarian, vegan, or just 'Any')"),
 ]
+
+CHAT_SLOTS = MANDATORY_CHAT_SLOTS + OPTIONAL_CHAT_SLOTS
+
+
+def _infer_traveler_type(travel_party: str) -> str:
+    """Best-effort classification of free-text travel_party into the enum
+    downstream agents/impact-assessment expect. Used by the rule-based chat
+    fallback where there's no Gemini available to do this inference."""
+    text = (travel_party or "").lower()
+    if any(w in text for w in ["infant", "baby", "toddler", "young child", "kid"]):
+        return "family_with_infant"
+    if any(w in text for w in ["senior", "elderly", "old age"]):
+        return "senior"
+    if "solo" in text and any(w in text for w in ["female", "woman", "girl"]):
+        return "solo_female"
+    if "solo" in text or "alone" in text or "myself" in text:
+        return "solo"
+    if "family" in text:
+        return "family"
+    if any(w in text for w in ["adventure", "trek", "hike"]):
+        return "adventure"
+    return "general"
 
 class ANITA:
     def __init__(self, initial_state, mode="Online"):
@@ -72,7 +101,7 @@ class ANITA:
         api_key = os.getenv("GOOGLE_API_KEY")
         known = {
             k: v for k, v in self.state_manager.state.items()
-            if k in ("origin", "destination", "dates", "budget", "food_pref", "traveler_type") and v
+            if k in ("origin", "destination", "dates", "purpose", "travel_party", "budget", "food_pref", "traveler_type") and v
         }
         convo = "\n".join(f"{turn['role'].capitalize()}: {turn['content']}" for turn in history)
         dynamic_text = (
@@ -103,15 +132,16 @@ class ANITA:
 
         reply = obj.get("reply") or text
         ready = bool(obj.get("ready", False)) and all(
-            self.state_manager.state.get(k) for k in ("origin", "destination", "dates")
+            self.state_manager.state.get(k) for k in ("origin", "destination", "dates", "purpose", "travel_party")
         )
         return reply, ready
 
     def _chat_rule_based(self, message: str):
         """
         Deterministic slot-filling used in Demo mode, and as the fallback
-        when the Gemini chat call fails in Online mode — asks one question
-        at a time, no network/API key required.
+        when the Gemini chat call fails in Online mode — asks one mandatory
+        question at a time (origin, destination, dates, purpose, travel
+        party), then the optional ones, no network/API key required.
         """
         state = self.state_manager.state
         message = (message or "").strip()
@@ -119,6 +149,8 @@ class ANITA:
         pending_slot = next((slot for slot, _ in CHAT_SLOTS if not state.get(slot)), None)
         if pending_slot and message:
             state[pending_slot] = message
+            if pending_slot == "travel_party":
+                state["traveler_type"] = _infer_traveler_type(message)
 
         next_slot = next(((slot, question) for slot, question in CHAT_SLOTS if not state.get(slot)), None)
         if next_slot:
@@ -241,74 +273,88 @@ class ANITA:
             "video_highlights": video_highlights,
         }
 
+    def _run_pipeline(self, traveler_type="general", preferences=None):
+        results = {}
+
+        # Step 1: Run core agents
+        for name in ["hotel", "food", "tour", "flight", "weather", "transport", "news"]:
+            if self.state_manager.route(name, self.routes):
+                output = self.agents[name].run(self.state_manager.state)
+                # Agents mutate and return the same shared state dict, so take a
+                # shallow snapshot before storing it under this agent's key —
+                # otherwise state[name] = output aliases state back into itself
+                # (state["transport"] = state) for any agent whose internal field
+                # name matches its orchestrator key (transport, weather, news).
+                snapshot = dict(output) if isinstance(output, dict) else output
+                self.state_manager.update(name, snapshot)
+                results[name] = snapshot
+
+        # Step 2: Assess impact
+        impact_report = self.agents["impact"].assess(results, traveler_type, preferences)
+        results["impact_assessment"] = impact_report.dict()
+
+        # Step 3: Build narrative
+        narrative = []
+        if impact_report.budget["flag"] == "Expensive":
+            narrative.append("Your hotel choice looks expensive, so I’ve pulled budget alternatives.")
+        if impact_report.accessibility.get("wheelchair_friendly_hotels"):
+            narrative.append("Accessibility is flagged — I’ve added wheelchair‑friendly hotel and tour options.")
+        if impact_report.risk["risk_level"] == "High":
+            narrative.append("Risk level is high — I suggest safer transport routes or daytime flights.")
+        if impact_report.sustainability["carbon_score"] == "High":
+            narrative.append("This itinerary has a high carbon footprint — eco‑friendly hotels and metro transport are available.")
+
+        results["impact_narrative"] = " ".join(narrative) if narrative else "Your itinerary looks balanced and well‑suited."
+
+        # Step 3.5: Build a day-by-day timeline from the real options above
+        results["timeline"] = self._build_timeline(results)
+
+        # Step 3.6: Build the traveler Guide (Visa, SIM/currency, video highlights)
+        results["guide"] = self._build_guide(results)
+
+        # Step 4: Apply alternates into state
+        if self.routes:
+            alternates = self.routes.alternate_routes(impact_report.dict(), self.state_manager.state)
+            self.state_manager.apply_alternates(alternates)
+
+            # Step 5: Re‑query agents with constraints
+            alternate_outputs = {}
+            for agent_name, constraint in alternates.items():
+                alt_output = self.agents[agent_name].run(
+                    {**self.state_manager.state, "constraint": constraint}
+                )
+                alternate_outputs[agent_name] = alt_output
+                self.state_manager.update(f"{agent_name}_alternates", alt_output)
+
+            results["alternate_options"] = alternate_outputs
+
+        return results
+
     def orchestrate(self, traveler_type="general", preferences=None):
-        def _run():
-            results = {}
-
-            # Step 1: Run core agents
-            for name in ["hotel", "food", "tour", "flight", "weather", "transport", "news"]:
-                if self.state_manager.route(name, self.routes):
-                    output = self.agents[name].run(self.state_manager.state)
-                    # Agents mutate and return the same shared state dict, so take a
-                    # shallow snapshot before storing it under this agent's key —
-                    # otherwise state[name] = output aliases state back into itself
-                    # (state["transport"] = state) for any agent whose internal field
-                    # name matches its orchestrator key (transport, weather, news).
-                    snapshot = dict(output) if isinstance(output, dict) else output
-                    self.state_manager.update(name, snapshot)
-                    results[name] = snapshot
-
-            # Step 2: Assess impact
-            impact_report = self.agents["impact"].assess(results, traveler_type, preferences)
-            results["impact_assessment"] = impact_report.dict()
-
-            # Step 3: Build narrative
-            narrative = []
-            if impact_report.budget["flag"] == "Expensive":
-                narrative.append("Your hotel choice looks expensive, so I’ve pulled budget alternatives.")
-            if impact_report.accessibility.get("wheelchair_friendly_hotels"):
-                narrative.append("Accessibility is flagged — I’ve added wheelchair‑friendly hotel and tour options.")
-            if impact_report.risk["risk_level"] == "High":
-                narrative.append("Risk level is high — I suggest safer transport routes or daytime flights.")
-            if impact_report.sustainability["carbon_score"] == "High":
-                narrative.append("This itinerary has a high carbon footprint — eco‑friendly hotels and metro transport are available.")
-
-            results["impact_narrative"] = " ".join(narrative) if narrative else "Your itinerary looks balanced and well‑suited."
-
-            # Step 3.5: Build a day-by-day timeline from the real options above
-            results["timeline"] = self._build_timeline(results)
-
-            # Step 3.6: Build the traveler Guide (Visa, SIM/currency, video highlights)
-            results["guide"] = self._build_guide(results)
-
-            # Step 4: Apply alternates into state
-            if self.routes:
-                alternates = self.routes.alternate_routes(impact_report.dict(), self.state_manager.state)
-                self.state_manager.apply_alternates(alternates)
-
-                # Step 5: Re‑query agents with constraints
-                alternate_outputs = {}
-                for agent_name, constraint in alternates.items():
-                    alt_output = self.agents[agent_name].run(
-                        {**self.state_manager.state, "constraint": constraint}
-                    )
-                    alternate_outputs[agent_name] = alt_output
-                    self.state_manager.update(f"{agent_name}_alternates", alt_output)
-
-                results["alternate_options"] = alternate_outputs
-
-            return results
-
         # Outer-layer semantic cache: a near-duplicate request (same trip,
         # slightly reworded preferences) skips the entire multi-agent run.
         state = self.state_manager.state
         query_text = (
             f"origin={state.get('origin')} destination={state.get('destination')} "
-            f"dates={state.get('dates')} budget={state.get('budget')} "
+            f"dates={state.get('dates')} purpose={state.get('purpose')} "
+            f"travel_party={state.get('travel_party')} budget={state.get('budget')} "
             f"food_pref={state.get('food_pref')} traveler_type={traveler_type} "
             f"preferences={preferences} mode={self.mode}"
         )
-        return semantic_call(query_text, _run, threshold=0.95)
+        return semantic_call(query_text, lambda: self._run_pipeline(traveler_type, preferences), threshold=0.95)
+
+    def revise_itinerary(self, feedback: str, traveler_type="general", preferences=None):
+        """
+        Human-in-the-loop revision: re-run the pipeline with the user's
+        rejection feedback applied as a constraint on every agent, bypassing
+        the semantic cache (a revision must never be served from the
+        original, now-rejected, cached itinerary).
+        """
+        self.state_manager.state["constraint"] = feedback
+        try:
+            return self._run_pipeline(traveler_type, preferences)
+        finally:
+            self.state_manager.state.pop("constraint", None)
 
     def run_itinerary(self, state):
         flight_agent = FlightAgent(mode="Online")

@@ -70,23 +70,31 @@ class FlightAgent:
 
         constraint = state.get("constraint")
 
-        # Demo mode → stubbed flights only
+        # Demo mode → rich stubbed round-trip flights showcasing the full schema
         if self.mode == "Demo":
+            def _leg(airline, route, dep, arr, dur, price, rating, fit):
+                return {
+                    "airline": airline, "route": route, "departure": dep, "arrival": arr,
+                    "duration": dur, "class_options": ["Economy", "Business"],
+                    "baggage_allowance": "15kg check-in, 7kg cabin", "price_range": price,
+                    "rating": rating, "fit": fit, "constraint_applied": constraint or "none",
+                }
+            origin, destination = state["origin"], state["destination"]
             state["flights"] = {
-                "outbound": [{
-                    "airline": "Demo Airlines",
-                    "route": f"{state['origin']} → {state['destination']}",
-                    "price_range": "$500",
-                    "constraint_applied": constraint or "none"
-                }],
-                "return": [{
-                    "airline": "Demo Airlines",
-                    "route": f"{state['destination']} → {state['origin']}",
-                    "price_range": "$500",
-                    "constraint_applied": constraint or "none"
-                }],
+                "outbound": [
+                    _leg("Demo Airways", f"{origin} -> {destination}", "06:00", "08:30", "2h 30m", "$", 4.2, "Early birds and budget travelers"),
+                    _leg("Demo Skyline", f"{origin} -> {destination}", "13:00", "15:45", "2h 45m", "$$", 4.4, "Families wanting daytime travel"),
+                    _leg("Demo Comfort Air", f"{origin} -> {destination}", "18:00", "20:30", "2h 30m", "$$$", 4.6, "Comfort-focused travelers"),
+                    _leg("Demo Value Jet", f"{origin} -> {destination}", "22:00", "01:00+1", "3h 0m", "$", 4.0, "Solo/budget-conscious travelers"),
+                ],
+                "return": [
+                    _leg("Demo Airways", f"{destination} -> {origin}", "09:00", "11:30", "2h 30m", "$", 4.2, "Early birds and budget travelers"),
+                    _leg("Demo Skyline", f"{destination} -> {origin}", "16:00", "18:45", "2h 45m", "$$", 4.4, "Families wanting daytime travel"),
+                    _leg("Demo Comfort Air", f"{destination} -> {origin}", "20:00", "22:30", "2h 30m", "$$$", 4.6, "Comfort-focused travelers"),
+                    _leg("Demo Value Jet", f"{destination} -> {origin}", "23:30", "02:30+1", "3h 0m", "$", 4.0, "Solo/budget-conscious travelers"),
+                ],
             }
-            state["vlog_insights"] = ["🎬 Demo vlog: Flight booking experience"]
+            state["vlog_insights"] = ["🎬 Demo vlog: Flight booking experience", "🎬 Demo vlog: Airport transfer tips"]
             return state
 
         try:

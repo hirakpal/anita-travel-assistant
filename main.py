@@ -153,6 +153,7 @@ if "anita" not in st.session_state or st.session_state.get("mode") != mode:
     st.session_state.mode = mode
     st.session_state.messages = []
     st.session_state.results = None
+    st.session_state.approval_state = "pending"  # pending -> awaiting_feedback -> approved
 
     greeting, _ready = st.session_state.anita.chat("", [])
     st.session_state.messages.append({"role": "assistant", "content": greeting})
@@ -161,6 +162,7 @@ if st.button("🔄 Start Over"):
     st.session_state.anita = ANITA({}, mode=mode)
     st.session_state.messages = []
     st.session_state.results = None
+    st.session_state.approval_state = "pending"
     greeting, _ready = st.session_state.anita.chat("", [])
     st.session_state.messages.append({"role": "assistant", "content": greeting})
     st.rerun()
@@ -185,6 +187,7 @@ if user_message:
     if ready and st.session_state.results is None:
         with st.spinner("Building your itinerary — coordinating with Hotel, Food, Tour, Flight, Weather, Transport, and News agents..."):
             st.session_state.results = anita.orchestrate(traveler_type=trip.get("traveler_type", "general"))
+            st.session_state.approval_state = "pending"
 
     st.rerun()
 
@@ -204,6 +207,59 @@ else:
         st.write(f"Mode: {mode}")
         st.write(f"**Trip:** {trip.get('origin')} → {trip.get('destination')} ({trip.get('dates')})")
         st.write(f"**Budget:** {trip.get('budget')} | **Food preference:** {trip.get('food_pref')}")
+
+        # ---------------- Human-in-the-loop: Approve or Request Changes ----------------
+        st.subheader("🧑‍💼 Human-in-the-Loop: Review Your Itinerary")
+        approval_state = st.session_state.approval_state
+
+        if approval_state == "approved":
+            st.success("🎉 Itinerary approved! Handing off to the Booking Agent...")
+            booking = st.session_state.get("booking_result")
+            if booking:
+                for b in booking.get("booking", []):
+                    if "error" in b:
+                        st.error(b["error"])
+                    else:
+                        st.write(f"✅ **Confirmation:** {b.get('confirmation', 'N/A')}")
+                        st.write(f"📄 **Cancellation policy:** {b.get('cancellation_policy', 'N/A')}")
+                        st.write(f"💳 **Payment options:** {', '.join(b.get('payment_options', []))}")
+                        st.write(f"📌 **Status:** {b.get('status', 'N/A')}")
+
+        elif approval_state == "awaiting_feedback":
+            st.warning("What would you like changed? Anita will rebuild the itinerary and bring it back for your approval.")
+            feedback = st.text_area("Your feedback", key="revision_feedback", placeholder="e.g. I'd like cheaper hotels, or fewer activities on Day 2...")
+            col_submit, col_cancel = st.columns(2)
+            with col_submit:
+                if st.button("📨 Submit Feedback & Rebuild") and feedback.strip():
+                    with st.spinner("Rebuilding your itinerary based on your feedback..."):
+                        st.session_state.results = anita.revise_itinerary(feedback.strip(), traveler_type=trip.get("traveler_type", "general"))
+                    st.session_state.approval_state = "pending"
+                    st.rerun()
+            with col_cancel:
+                if st.button("↩️ Cancel"):
+                    st.session_state.approval_state = "pending"
+                    st.rerun()
+
+        else:  # pending
+            st.info("Review the details below (Flights, Hotels, Transport, Activities, Culinary, Guide), then approve or request changes.")
+            col_approve, col_reject = st.columns(2)
+            with col_approve:
+                if st.button("✅ Approve Itinerary"):
+                    itinerary_summary = {
+                        "origin": trip.get("origin"), "destination": trip.get("destination"), "dates": trip.get("dates"),
+                        "hotel": next((h.get("name") for h in results.get("hotel", {}).get("hotels", [])), None),
+                        "restaurants": [f.get("name") for f in results.get("food", {}).get("restaurants", [])],
+                        "activities": [t.get("title") for t in results.get("tour", {}).get("tour_summary", {}).get("tours", [])],
+                        "outbound_flight": next((f.get("airline") for f in results.get("flight", {}).get("flights", {}).get("outbound", [])), None),
+                        "return_flight": next((f.get("airline") for f in results.get("flight", {}).get("flights", {}).get("return", [])), None),
+                    }
+                    st.session_state.approval_state = "approved"
+                    st.session_state.booking_result = anita.finalize_booking(itinerary_summary, True)
+                    st.rerun()
+            with col_reject:
+                if st.button("✏️ Request Changes"):
+                    st.session_state.approval_state = "awaiting_feedback"
+                    st.rerun()
 
         st.subheader("Caching & Token Savings")
 
