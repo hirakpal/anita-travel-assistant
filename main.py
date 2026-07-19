@@ -375,17 +375,30 @@ else:
                         st.write(f"📌 **Status:** {b.get('status', 'N/A')}")
 
         elif approval_state == "awaiting_feedback":
-            st.warning("What would you like changed? Anita will rebuild the itinerary and bring it back for your approval.")
+            clarifying_question = st.session_state.get("revision_clarifying_question")
+            if clarifying_question:
+                st.warning(f"❓ {clarifying_question}")
+            else:
+                st.warning("What would you like changed? Anita will rebuild the itinerary and bring it back for your approval.")
             feedback = st.text_area("Your feedback", key="revision_feedback", placeholder="e.g. I'd like cheaper hotels, or fewer activities on Day 2...")
             col_submit, col_cancel = st.columns(2)
             with col_submit:
                 if st.button("📨 Submit Feedback & Rebuild") and feedback.strip():
                     with st.spinner("Rebuilding your itinerary based on your feedback..."):
-                        st.session_state.results = anita.revise_itinerary(feedback.strip(), traveler_type=trip.get("traveler_type", "general"))
-                    st.session_state.approval_state = "pending"
+                        revision_result = anita.revise_itinerary(feedback.strip(), traveler_type=trip.get("traveler_type", "general"))
+                    if revision_result.get("needs_clarification"):
+                        # Ambiguous feedback (e.g. an unanswered routing choice) — ask
+                        # instead of silently guessing and rebuilding anyway. Stay in
+                        # awaiting_feedback so the traveler can answer and resubmit.
+                        st.session_state.revision_clarifying_question = revision_result["clarifying_question"]
+                    else:
+                        st.session_state.results = revision_result
+                        st.session_state.pop("revision_clarifying_question", None)
+                        st.session_state.approval_state = "pending"
                     st.rerun()
             with col_cancel:
                 if st.button("↩️ Cancel"):
+                    st.session_state.pop("revision_clarifying_question", None)
                     st.session_state.approval_state = "pending"
                     st.rerun()
 

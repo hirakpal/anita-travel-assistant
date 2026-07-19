@@ -112,6 +112,11 @@ def summarize_results(results, mode="Online"):
     insights = []
     for match in results.get("matches", []):
         meta = match.get("metadata", {})
+        # Skip stub/incomplete vectors (no real country/provider) instead of
+        # rendering literal "None SIM by None" — treat as no match so the
+        # caller's Gemini fallback kicks in instead of showing garbage.
+        if not meta.get("country") or not meta.get("sim_provider"):
+            continue
         insights.append(
             f"📱 {meta.get('country')} SIM by {meta.get('sim_provider')} — {meta.get('sim_plan')}, Fee: {meta.get('fees')}, Available: {meta.get('availability')} | "
             f"💱 Currency: {meta.get('currency')} Rate: {meta.get('exchange_rate')}"

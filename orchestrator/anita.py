@@ -6,6 +6,7 @@ import concurrent.futures
 from prompts.anita_prompt import ANITA_PROMPT
 from prompts.itinerary_prompt import ITINERARY_PROMPT
 from prompts.guide_prompt import VISA_PROMPT, SIM_CURRENCY_PROMPT, LOCAL_TIPS_PROMPT, VIDEO_SUMMARY_PROMPT
+from prompts.revision_prompt import REVISION_ANALYSIS_PROMPT
 from orchestrator.state_manager import StateManager
 from agents.hotel_agent import HotelAgent
 from agents.food_agent import FoodAgent
@@ -530,12 +531,80 @@ class ANITA:
         rejection feedback applied as a constraint on every agent, bypassing
         the semantic cache (a revision must never be served from the
         original, now-rejected, cached itinerary).
+
+        Before rebuilding, the feedback is analyzed (see
+        _analyze_revision_feedback): if it implies a schedule/duration
+        change, state["dates"] is updated so the timeline actually gets
+        longer/shorter instead of silently keeping the old length; if it's
+        genuinely ambiguous (e.g. "return via Delhi or fly direct from
+        Agra?" left unanswered), this returns a clarification request
+        instead of guessing and rebuilding anyway.
         """
-        self.state_manager.state["constraint"] = feedback
+        analysis = self._analyze_revision_feedback(feedback)
+
+        if analysis.get("needs_clarification"):
+            return {
+                "needs_clarification": True,
+                "clarifying_question": analysis.get("clarifying_question")
+                    or "Could you clarify exactly what you'd like changed?",
+            }
+
+        if analysis.get("updated_dates"):
+            self.state_manager.state["dates"] = analysis["updated_dates"]
+
+        self.state_manager.state["constraint"] = analysis.get("agent_constraint") or feedback
         try:
             return self._run_pipeline(traveler_type, preferences)
         finally:
             self.state_manager.state.pop("constraint", None)
+
+    def _analyze_revision_feedback(self, feedback: str):
+        """
+        One Gemini call that decides whether "Request Changes" feedback
+        needs a clarifying question before rebuilding, and whether it
+        implies a trip-length change. See prompts/revision_prompt.py.
+        Defaults to "just rebuild with the feedback as-is" on any failure,
+        preserving the previous (simpler) behavior as a safe fallback.
+        """
+        default = {"needs_clarification": False, "clarifying_question": None,
+                   "updated_dates": None, "agent_constraint": feedback}
+        if self.mode == "Demo":
+            return default
+
+        state = self.state_manager.state
+        dynamic_text = (
+            f"Origin: {state.get('origin')}\nDestination: {state.get('destination')}\n"
+            f"Current dates/duration: {state.get('dates')}\n\nTraveler feedback: {feedback}"
+        )
+        try:
+            def _fetch():
+                api_key = os.getenv("GOOGLE_API_KEY")
+                body = build_gemini_request("ANITA:revision_analysis", REVISION_ANALYSIS_PROMPT, dynamic_text)
+                resp = requests.post(
+                    "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent",
+                    params={"key": api_key},
+                    json=body,
+                    timeout=15
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                return data["candidates"][0]["content"]["parts"][0]["text"]
+
+            text = call_api("gemini:revision_analysis",
+                             {"destination": state.get("destination"), "dates": state.get("dates"), "feedback": feedback},
+                             fetch_fn=_fetch)
+            obj = extract_json_object(text)
+            if not obj:
+                return default
+            return {
+                "needs_clarification": bool(obj.get("needs_clarification")),
+                "clarifying_question": obj.get("clarifying_question"),
+                "updated_dates": obj.get("updated_dates"),
+                "agent_constraint": obj.get("agent_constraint") or feedback,
+            }
+        except Exception as e:
+            print(f"⚠️ Revision analysis error: {e!r}")
+            return default
 
     def run_itinerary(self, state):
         flight_agent = FlightAgent(mode="Online")

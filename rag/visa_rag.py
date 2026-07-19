@@ -112,6 +112,11 @@ def summarize_results(results, mode="Online"):
     insights = []
     for match in results.get("matches", []):
         meta = match.get("metadata", {})
+        # Skip stub/incomplete vectors (no real country/visa_type) instead of
+        # rendering literal "None None visa" — treat them as no match so the
+        # caller's Gemini fallback kicks in instead of showing garbage.
+        if not meta.get("country") or not meta.get("visa_type"):
+            continue
         insights.append(
             f"🛂 {meta.get('country')} {meta.get('visa_type')} visa — "
             f"Duration: {meta.get('duration')}, Fee: {meta.get('fees')}, "
