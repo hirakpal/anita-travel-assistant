@@ -4,6 +4,7 @@ import re
 import requests
 from prompts.anita_prompt import ANITA_PROMPT
 from prompts.itinerary_prompt import ITINERARY_PROMPT
+from prompts.guide_prompt import VISA_PROMPT, SIM_CURRENCY_PROMPT, LOCAL_TIPS_PROMPT
 from orchestrator.state_manager import StateManager
 from agents.hotel_agent import HotelAgent
 from agents.food_agent import FoodAgent
@@ -246,11 +247,18 @@ class ANITA:
 
     def _build_guide(self, results):
         """
-        Traveler Guide: visa requirements, SIM/currency info, and a rollup of
-        the YouTube-vlog highlights already gathered by the other agents.
-        Each source is independently resilient — a RAG/Pinecone failure (e.g.
-        no data indexed yet for this destination) never breaks the guide,
-        it just yields an empty section.
+        Traveler Guide: visa requirements, SIM/currency info, local tips, and
+        a rollup of YouTube-vlog highlights already gathered by other agents.
+
+        The RAG/Pinecone lookups (visa, SIM/currency, video highlights) only
+        return real data once someone has actually indexed content for this
+        destination — nothing in this codebase seeds that data yet, so in
+        practice they come back empty. Rather than show a broken-looking
+        blank tab, visa/SIM/tips each fall back to a direct Gemini call (in
+        Demo mode or on any failure, they fall back further to canned demo
+        text) — video_highlights alone stays honestly empty when there's no
+        actual indexed video content, since we won't fabricate "from
+        YouTube" citations that don't exist.
         """
         destination = self.state_manager.state.get("destination", "")
 
@@ -260,8 +268,14 @@ class ANITA:
         except Exception as e:
             print(f"⚠️ Visa RAG error: {e!r}")
             visa_info = []
+        if not visa_info:
+            visa_info = self._guide_gemini_fallback(VISA_PROMPT, "visa_info", destination)
 
         sim_currency_info = results.get("transport", {}).get("utility_insights", [])
+        if not sim_currency_info:
+            sim_currency_info = self._guide_gemini_fallback(SIM_CURRENCY_PROMPT, "sim_currency_info", destination)
+
+        local_tips = self._guide_gemini_fallback(LOCAL_TIPS_PROMPT, "tips", destination)
 
         video_highlights = []
         for key in ("hotel", "food", "transport", "flight", "weather"):
@@ -270,8 +284,33 @@ class ANITA:
         return {
             "visa": visa_info,
             "sim_currency": sim_currency_info,
+            "local_tips": local_tips,
             "video_highlights": video_highlights,
         }
+
+    def _guide_gemini_fallback(self, prompt, response_key, destination):
+        if self.mode == "Demo":
+            return [f"Demo: {response_key.replace('_', ' ')} highlight for {destination}"]
+        try:
+            def _fetch():
+                api_key = os.getenv("GOOGLE_API_KEY")
+                body = build_gemini_request(f"ANITA:guide:{response_key}", prompt, f"Destination: {destination}")
+                resp = requests.post(
+                    "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent",
+                    params={"key": api_key},
+                    json=body,
+                    timeout=15
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                return data["candidates"][0]["content"]["parts"][0]["text"]
+
+            text = call_api(f"gemini:guide:{response_key}", {"destination": destination}, fetch_fn=_fetch)
+            obj = extract_json_object(text)
+            return (obj or {}).get(response_key, []) or []
+        except Exception as e:
+            print(f"⚠️ Guide fallback error ({response_key}): {e!r}")
+            return []
 
     def _run_pipeline(self, traveler_type="general", preferences=None):
         results = {}

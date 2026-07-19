@@ -424,13 +424,21 @@ else:
         else:
             st.info("No SIM/currency information available yet for this destination.")
 
+        st.subheader("💡 Local Tips")
+        local_tips = guide.get("local_tips", [])
+        if local_tips:
+            for t in local_tips:
+                st.write(f"- {t}")
+        else:
+            st.info("No local tips available yet for this destination.")
+
         st.subheader("📺 Video Highlights")
         video_highlights = guide.get("video_highlights", [])
         if video_highlights:
             for v in video_highlights:
                 st.write(f"- {v}")
         else:
-            st.info("No video highlights available yet for this destination.")
+            st.info("No indexed travel-vlog content yet for this destination — this section fills in once real video data is indexed (see Local Tips above for AI-generated guidance in the meantime).")
 
     # ---------------- DISRUPTIONS TAB ----------------
     with tab_disruptions:
