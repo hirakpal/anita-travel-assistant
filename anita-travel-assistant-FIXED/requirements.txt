@@ -1,0 +1,37 @@
+# Core UI and visualization
+streamlit==1.36.0
+pytest==8.2.2
+plotly==5.22.0
+
+# Core HTTP requests
+requests==2.31.0
+
+# Environment variable management
+python-dotenv==1.0.1
+
+# JSON parsing and validation
+jsonschema==4.22.0
+
+# Logging (built-in, but structlog adds structured logging if needed)
+structlog==24.1.0
+
+# Caching (optional, if you re‑add cache.py with Redis)
+redis==5.0.4
+
+# Token tracking / usage monitoring
+tiktoken==0.7.0
+
+# Data handling
+pandas==2.2.2
+
+# Date/time utilities
+python-dateutil==2.9.0.post0
+
+# Typing support
+typing-extensions==4.12.2
+
+# Vector database for RAG
+pinecone-client==3.2.2
+
+# Embedding model for RAG
+sentence-transformers==3.0.1
