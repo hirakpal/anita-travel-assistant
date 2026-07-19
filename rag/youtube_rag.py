@@ -116,22 +116,22 @@ def query_videos(destination, interests, top_k=5, mode="Online"):
     return results
 
 # -------------------------------
-# Raw matches (for cross-video synthesis, e.g. the Guide tab's summary)
+# Raw matches (for cross-video synthesis, e.g. the Guide tab's summary or a
+# specific hotel's "What travelers say")
 # -------------------------------
-def get_video_transcripts(destination, top_k=8, mode="Online"):
+def search_transcripts(query_text, top_k=8, mode="Online"):
     """
-    Return the raw {title, creator, excerpt} for the top indexed videos on
-    this destination, so a caller can synthesize ONE combined summary
-    across all of them (rather than listing each video's snippet
-    separately, which just reads like disconnected quotes).
+    Return the raw {title, creator, excerpt} for the top indexed videos
+    matching an arbitrary query_text, so a caller can synthesize ONE
+    combined write-up across all of them (rather than listing each video's
+    snippet separately, which just reads like disconnected quotes).
     """
     if mode == "Demo":
         return [
-            {"title": f"Demo: {destination} highlights reel", "creator": "Demo Creator",
-             "excerpt": f"Demo transcript excerpt covering {destination}'s top sights and food."}
+            {"title": f"Demo: {query_text} highlights reel", "creator": "Demo Creator",
+             "excerpt": f"Demo transcript excerpt covering {query_text}."}
         ]
 
-    query_text = f"{destination} travel guide things to do highlights culture food tips"
     request = {"index": PINECONE_INDEX, "query_text": query_text, "top_k": top_k}
     start = time.time()
     try:
@@ -156,6 +156,12 @@ def get_video_transcripts(destination, top_k=8, mode="Online"):
             "excerpt": excerpt,
         })
     return videos
+
+
+def get_video_transcripts(destination, top_k=8, mode="Online"):
+    """Destination-wide transcript search, used by the Guide tab's cross-video summary."""
+    query_text = f"{destination} travel guide things to do highlights culture food tips"
+    return search_transcripts(query_text, top_k=top_k, mode=mode)
 
 # -------------------------------
 # Summarization Agent

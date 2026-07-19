@@ -1,6 +1,8 @@
 import sys
+import json
 from urllib.parse import urlencode, quote
 import streamlit as st
+import streamlit.components.v1 as components
 from utils.audit_trail import (
     log_step, get_recent_entries, get_log_file_text, format_entries_as_text,
     get_recent_network_entries, get_network_log_file_text, format_network_entries_as_text,
@@ -122,6 +124,53 @@ def show_map(origin, destination, waypoints=None):
     elif mode == "Demo":
         st.success(f"🎬 Demo Mode: Simulated route {origin} → {destination} with waypoints {waypoints}")
 
+# ---------------- Helper: Google Maps with individually pinned locations ----------------
+def show_pin_map(locations, height=420):
+    """
+    locations: list of {"label": str, "query": str} — query is geocoded
+    client-side (Maps JavaScript API + Geocoder) and dropped as a labeled
+    pin, so each hotel/activity/restaurant shows up as its own correctly
+    placed marker instead of a single directions route between two points.
+    """
+    locations = [loc for loc in locations if loc.get("query")]
+    if mode == "Demo":
+        if locations:
+            st.success("🎬 Demo Mode: pins for " + ", ".join(loc["label"] for loc in locations))
+        return
+    if not locations:
+        st.info("No locations to show on the map yet.")
+        return
+
+    locations_json = json.dumps(locations)
+    html = f"""
+        <div id="anita-pin-map" style="width:100%;height:{height}px;border-radius:8px;"></div>
+        <script>
+          function initAnitaPinMap() {{
+            var locations = {locations_json};
+            var map = new google.maps.Map(document.getElementById("anita-pin-map"), {{
+              zoom: 12, center: {{lat: 20.5937, lng: 78.9629}}
+            }});
+            var geocoder = new google.maps.Geocoder();
+            var bounds = new google.maps.LatLngBounds();
+            var remaining = locations.length;
+            if (remaining === 0) return;
+            locations.forEach(function(loc) {{
+              geocoder.geocode({{ address: loc.query }}, function(results, status) {{
+                remaining -= 1;
+                if (status === "OK" && results[0]) {{
+                  var pos = results[0].geometry.location;
+                  new google.maps.Marker({{ map: map, position: pos, title: loc.label }});
+                  bounds.extend(pos);
+                }}
+                if (remaining === 0 && !bounds.isEmpty()) {{ map.fitBounds(bounds); }}
+              }});
+            }});
+          }}
+        </script>
+        <script src="https://maps.googleapis.com/maps/api/js?key={API_KEY}&callback=initAnitaPinMap" async defer></script>
+    """
+    components.html(html, height=height + 10)
+
 # ---------------- Helper: Suggestion Card ----------------
 def suggestion_card(icon, title, price, rating, popularity, distance=None, duration=None, cuisine=None):
     st.markdown(f"""
@@ -162,6 +211,10 @@ def hotel_card(h, idx):
                 st.write("📍 **Distance to key spots:**")
                 for d in h["distances"]:
                     st.write(f"- {d.get('landmark', '')}: {d.get('distance', '')}")
+            if h.get("traveler_summary"):
+                st.write("📺 **What travelers say** (Google reviews + YouTube):")
+                for point in h["traveler_summary"]:
+                    st.write(f"- {point}")
             if h.get("fit"):
                 st.info(f"✅ **Why this fits you:** {h['fit']}")
 
@@ -444,8 +497,6 @@ else:
         else:
             st.info("No return flight options available.")
 
-        show_map(trip.get("origin"), trip.get("destination"))
-
     # ---------------- HOTELS TAB ----------------
     with tab_hotels:
         st.header("Hotels")
@@ -454,12 +505,11 @@ else:
         if hotels:
             for i, h in enumerate(hotels):
                 hotel_card(h, i)
-        hotel_vlogs = results.get("hotel", {}).get("vlog_insights", [])
-        if hotel_vlogs:
-            st.caption("📺 What travelers say (from YouTube)")
-            for v in hotel_vlogs:
-                st.write(f"- {v}")
-        show_map(trip.get("destination"), hotels[0].get("name", trip.get("destination")) if hotels else trip.get("destination"))
+            st.subheader("🗺️ Hotels on the Map")
+            show_pin_map([
+                {"label": h.get("name", "Hotel"), "query": f"{h.get('name', '')}, {h.get('location') or trip.get('destination')}"}
+                for h in hotels if h.get("name") and "error" not in h
+            ])
 
     # ---------------- TRANSPORT TAB ----------------
     with tab_transport:
@@ -470,7 +520,6 @@ else:
                 suggestion_card("🚖", t.get("name", "Transport"), t.get("price", "N/A"),
                                 t.get("rating", "N/A"), t.get("popularity", ""),
                                 distance=t.get("distance"), duration=t.get("duration"))
-        show_map(trip.get("origin"), trip.get("destination"))
 
     # ---------------- ACTIVITIES TAB ----------------
     with tab_activities:
@@ -480,8 +529,11 @@ else:
         if tours:
             for i, t in enumerate(tours):
                 tour_card(t, i)
-        if tours:
-            show_map(tours[0].get("location", trip.get("destination")), tours[-1].get("location", trip.get("destination")))
+            st.subheader("🗺️ Activities on the Map")
+            show_pin_map([
+                {"label": t.get("title", "Activity"), "query": f"{t.get('location') or trip.get('destination')}"}
+                for t in tours if t.get("location") and "error" not in t
+            ])
 
     # ---------------- CULINARY TAB ----------------
     with tab_culinary:
@@ -492,12 +544,16 @@ else:
         if foods:
             for i, f in enumerate(foods):
                 food_card(f, cuisine_filter, i)
+            st.subheader("🗺️ Restaurants on the Map")
+            show_pin_map([
+                {"label": f.get("name", "Restaurant"), "query": f"{f.get('name', '')}, {trip.get('destination')}"}
+                for f in foods if f.get("name") and "error" not in f
+            ])
         food_vlogs = results.get("food", {}).get("vlog_insights", [])
         if food_vlogs:
             st.caption("📺 What travelers say (from YouTube)")
             for v in food_vlogs:
                 st.write(f"- {v}")
-        show_map(trip.get("destination"), foods[0].get("name", trip.get("destination")) if foods else trip.get("destination"))
 
     # ---------------- GUIDE TAB ----------------
     with tab_guide:

@@ -1,11 +1,13 @@
 #agents/hotel_agent.py
 import os
+import concurrent.futures
 import requests
 from rag import youtube_rag
-from prompts.hotel_prompt import HOTEL_PROMPT
+from prompts.hotel_prompt import HOTEL_PROMPT, HOTEL_TRAVELER_SUMMARY_PROMPT
 from utils.cache import call_api
 from utils.prompt_cache import build_gemini_request
-from utils.parsers import parse_hotels_json_output
+from utils.parsers import parse_hotels_json_output, extract_json_object
+from utils.google_places import get_place_reviews
 class HotelAgent:
     def __init__(self, name="HotelAgent", mode="Online", provider="gemini"):
         self.name = name
@@ -68,6 +70,8 @@ class HotelAgent:
                 },
             ]
             state["vlog_insights"] = ["🎬 Demo vlog: Hotel booking highlights", "🎬 Demo vlog: Top-rated stays walkthrough"]
+            for h in state["hotels"]:
+                h["traveler_summary"] = [f"Demo: guests of {h['name']} consistently mention the {h.get('highlights', 'standout amenities')}."]
             return state
 
         # ONLINE MODE → Gemini API
@@ -116,4 +120,77 @@ class HotelAgent:
             print(f"⚠️ RAG error: {e!r}")
             state["vlog_insights"] = []
 
+        # Per-hotel "What travelers say", synthesized from real Google
+        # reviews + relevant YouTube transcripts (not the generic
+        # destination-wide vlog list above) — run concurrently since each
+        # hotel needs its own Places lookup + RAG query + Gemini call.
+        real_hotels = [h for h in state.get("hotels", []) if isinstance(h, dict) and h.get("name") and "error" not in h]
+        if real_hotels:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=len(real_hotels)) as executor:
+                futures = {
+                    executor.submit(self._summarize_hotel_traveler_opinions, h, state["destination"]): h
+                    for h in real_hotels
+                }
+                for future in concurrent.futures.as_completed(futures):
+                    hotel = futures[future]
+                    try:
+                        hotel["traveler_summary"] = future.result()
+                    except Exception as e:
+                        print(f"⚠️ Hotel traveler-summary error ({hotel.get('name')}): {e!r}")
+                        hotel["traveler_summary"] = []
+
         return state
+
+    def _summarize_hotel_traveler_opinions(self, hotel, destination):
+        """
+        Combine real Google Places reviews and relevant YouTube transcript
+        excerpts for this specific hotel into one synthesized "what
+        travelers say" write-up, instead of showing raw destination-wide
+        vlog snippets that aren't really about this hotel.
+        """
+        name = hotel["name"]
+        location = hotel.get("location") or destination
+
+        google_reviews = get_place_reviews(name, location)
+        video_matches = youtube_rag.search_transcripts(
+            f"{name} {destination} hotel review experience", top_k=3, mode=self.mode
+        )
+
+        if not google_reviews and not video_matches:
+            return []
+
+        sources_block = ""
+        if google_reviews:
+            sources_block += "\n\n".join(f"--- Google review ---\n{r}" for r in google_reviews)
+        if video_matches:
+            if sources_block:
+                sources_block += "\n\n"
+            sources_block += "\n\n".join(
+                f"--- Video: \"{v['title']}\" by {v['creator']} ---\n{v['excerpt']}" for v in video_matches
+            )
+
+        try:
+            def _fetch():
+                api_key = os.getenv("GOOGLE_API_KEY")
+                body = build_gemini_request(
+                    "HotelAgent:traveler_summary", HOTEL_TRAVELER_SUMMARY_PROMPT,
+                    f"Hotel: {name}\nDestination: {destination}\n\n{sources_block}"
+                )
+                resp = requests.post(
+                    "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent",
+                    params={"key": api_key},
+                    json=body,
+                    timeout=20
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                return data["candidates"][0]["content"]["parts"][0]["text"]
+
+            cache_key = {"hotel": name, "destination": destination,
+                         "google_review_count": len(google_reviews), "video_count": len(video_matches)}
+            text = call_api("gemini:hotel:traveler_summary", cache_key, fetch_fn=_fetch)
+            obj = extract_json_object(text)
+            return (obj or {}).get("traveler_summary", []) or []
+        except Exception as e:
+            print(f"⚠️ Traveler summary Gemini error ({name}): {e!r}")
+            return []
