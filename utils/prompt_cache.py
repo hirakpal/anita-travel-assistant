@@ -22,7 +22,7 @@ import requests
 
 GEMINI_CACHE_URL = "https://generativelanguage.googleapis.com/v1beta/cachedContents"
 DEFAULT_TTL_SECONDS = 3600
-DEFAULT_MODEL = "models/gemini-1.5-flash"
+DEFAULT_MODEL = "models/gemini-flash-latest"
 
 _handles = {}  # prompt_hash -> {"name": str, "expires_at": float}
 _hits = 0

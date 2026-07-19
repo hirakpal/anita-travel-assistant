@@ -33,7 +33,7 @@ class FoodAgent:
                 text = f"Destination: {state['destination']}\nFood preferences: {preferences}"
                 body = build_gemini_request(self.name, self.prompt, text)
                 resp = requests.post(
-                    "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent",
+                    "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent",
                     params={"key": api_key},
                     json=body,
                     timeout=15
