@@ -1,7 +1,9 @@
 #orchestrator/anita.py
 import os
+import re
 import requests
 from prompts.anita_prompt import ANITA_PROMPT
+from prompts.itinerary_prompt import ITINERARY_PROMPT
 from orchestrator.state_manager import StateManager
 from agents.hotel_agent import HotelAgent
 from agents.food_agent import FoodAgent
@@ -14,6 +16,7 @@ from agents.impact_assessment_agent import ImpactAssessmentAgent
 from agents.news_agent import NewsAgent
 from human_agent_integration import HumanAgentIntegration
 from utils.semantic_cache import semantic_call
+from utils.cache import call_api
 from utils.prompt_cache import build_gemini_request
 from utils.parsers import extract_json_object
 
@@ -123,6 +126,82 @@ class ANITA:
         state.setdefault("traveler_type", "general")
         return "Perfect, I have everything I need! Building your itinerary now...", True
 
+    def _guess_duration_days(self):
+        dates_text = str(self.state_manager.state.get("dates") or "")
+        match = re.search(r"(\d+)\s*(?:day|days)\b", dates_text, re.IGNORECASE)
+        if match:
+            return max(1, min(int(match.group(1)), 14))
+        match = re.search(r"(\d+)\s*(?:night|nights)\b", dates_text, re.IGNORECASE)
+        if match:
+            return max(1, min(int(match.group(1)) + 1, 14))
+        return 3
+
+    def _build_timeline(self, results):
+        """
+        Arrange the actual hotel/food/tour/transport options already chosen
+        by the sub-agents into a day-by-day schedule. Never invents new
+        options — only sequences the real ones.
+        """
+        hotels = [h.get("name") for h in results.get("hotel", {}).get("hotels", []) if h.get("name")]
+        foods = [f.get("name") for f in results.get("food", {}).get("restaurants", []) if f.get("name")]
+        tours = [t.get("title") for t in results.get("tour", {}).get("tour_summary", {}).get("tours", []) if t.get("title")]
+        duration = self._guess_duration_days()
+
+        if self.mode != "Demo" and (hotels or foods or tours):
+            try:
+                return self._timeline_gemini(hotels, foods, tours, duration)
+            except Exception as e:
+                print(f"⚠️ Timeline build error: {e!r}")
+        return self._timeline_rule_based(hotels, foods, tours, duration)
+
+    def _timeline_gemini(self, hotels, foods, tours, duration):
+        destination = self.state_manager.state.get("destination", "")
+
+        def _fetch():
+            api_key = os.getenv("GOOGLE_API_KEY")
+            dynamic_text = (
+                f"Destination: {destination}\n"
+                f"Trip length: {duration} days\n"
+                f"Hotel options: {hotels}\n"
+                f"Restaurant options: {foods}\n"
+                f"Tour/activity options: {tours}\n"
+            )
+            body = build_gemini_request("ANITA:timeline", ITINERARY_PROMPT, dynamic_text)
+            resp = requests.post(
+                "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent",
+                params={"key": api_key},
+                json=body,
+                timeout=15
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            return data["candidates"][0]["content"]["parts"][0]["text"]
+
+        params = {"destination": destination, "duration": duration, "hotels": hotels, "foods": foods, "tours": tours}
+        text = call_api("gemini:timeline", params, fetch_fn=_fetch)
+        obj = extract_json_object(text)
+        timeline = (obj or {}).get("timeline")
+        if not timeline:
+            return self._timeline_rule_based(hotels, foods, tours, duration)
+        return timeline
+
+    def _timeline_rule_based(self, hotels, foods, tours, duration):
+        """Deterministic day-by-day layout used in Demo mode / as a Gemini fallback."""
+        hotel = hotels[0] if hotels else "your hotel"
+        timeline = []
+        for day in range(1, duration + 1):
+            schedule = []
+            if day == 1:
+                schedule.append({"time": "Morning", "activity": f"Arrival and check-in at {hotel}"})
+            if tours:
+                schedule.append({"time": "Afternoon", "activity": tours[(day - 1) % len(tours)]})
+            if foods:
+                schedule.append({"time": "Evening", "activity": f"Dinner at {foods[(day - 1) % len(foods)]}"})
+            if day == duration and duration > 1:
+                schedule.append({"time": "Late", "activity": f"Check-out from {hotel} and departure"})
+            timeline.append({"day": day, "label": "Arrival Day" if day == 1 else ("Departure Day" if day == duration else ""), "schedule": schedule})
+        return timeline
+
     def orchestrate(self, traveler_type="general", preferences=None):
         def _run():
             results = {}
@@ -156,6 +235,9 @@ class ANITA:
                 narrative.append("This itinerary has a high carbon footprint — eco‑friendly hotels and metro transport are available.")
 
             results["impact_narrative"] = " ".join(narrative) if narrative else "Your itinerary looks balanced and well‑suited."
+
+            # Step 3.5: Build a day-by-day timeline from the real options above
+            results["timeline"] = self._build_timeline(results)
 
             # Step 4: Apply alternates into state
             if self.routes:

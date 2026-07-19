@@ -185,7 +185,23 @@ else:
         col8.metric("Handles Created", prompt_stats["handles_created"])
         col9.metric("Reuse Rate", f"{prompt_stats['reuse_percent']}%")
 
-        show_map(trip.get("origin"), trip.get("destination"))
+        st.subheader("📅 Day-by-Day Timeline")
+        timeline = results.get("timeline", [])
+        if timeline:
+            for day in timeline:
+                label = f" — {day['label']}" if day.get("label") else ""
+                with st.expander(f"Day {day.get('day', '?')}{label}", expanded=(day.get("day") == 1)):
+                    for slot in day.get("schedule", []):
+                        st.write(f"**{slot.get('time', '')}:** {slot.get('activity', '')}")
+        else:
+            st.info("Timeline unavailable for this trip.")
+
+        st.subheader("🗺️ Trip Map")
+        hotel_names = [h.get("name") for h in results.get("hotel", {}).get("hotels", []) if h.get("name")]
+        food_names = [f.get("name") for f in results.get("food", {}).get("restaurants", []) if f.get("name")]
+        tour_locations = [t.get("location") for t in results.get("tour", {}).get("tour_summary", {}).get("tours", []) if t.get("location")]
+        stops = (hotel_names[:1] + tour_locations + food_names[:2])
+        show_map(trip.get("origin"), hotel_names[0] if hotel_names else trip.get("destination"), waypoints=stops)
 
     # ---------------- FLIGHTS TAB ----------------
     with tab_flights:
