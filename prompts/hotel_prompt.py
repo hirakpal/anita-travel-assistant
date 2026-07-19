@@ -63,4 +63,5 @@ Return ONLY a JSON object, no prose before or after, shaped exactly like:
   ]
 }
 List 2-3 real, notable distances (landmarks/transit) per hotel, matched to the destination.
+Return exactly 4 hotel options, covering a spread of styles/price points.
 """

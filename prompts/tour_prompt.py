@@ -36,4 +36,5 @@ Return ONLY a JSON object, no prose before or after, shaped exactly like:
     }
   ]
 }
+Return exactly 4 tour/activity options, covering a spread of experiences.
 """

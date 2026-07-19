@@ -59,4 +59,5 @@ Return ONLY a JSON object, no prose before or after, shaped exactly like:
     }
   ]
 }
+Return exactly 4 restaurant options, covering a spread of cuisines/price points.
 """

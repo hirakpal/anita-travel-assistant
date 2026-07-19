@@ -18,6 +18,7 @@ from human_agent_integration import HumanAgentIntegration
 from utils.semantic_cache import semantic_call
 from utils.cache import call_api
 from utils.prompt_cache import build_gemini_request
+from rag import visa_rag
 from utils.parsers import extract_json_object
 
 # Trip details gathered conversationally, in the order Anita asks for them.
@@ -147,6 +148,15 @@ class ANITA:
         tours = [t.get("title") for t in results.get("tour", {}).get("tour_summary", {}).get("tours", []) if t.get("title")]
         duration = self._guess_duration_days()
 
+        return self.rebuild_timeline_from_selection(hotels, foods, tours)
+
+    def rebuild_timeline_from_selection(self, hotels, foods, tours):
+        """
+        Public entry point for re-sequencing the timeline after the user
+        adds/removes specific hotel, restaurant, or activity options — only
+        ever arranges the given names, never invents new ones.
+        """
+        duration = self._guess_duration_days()
         if self.mode != "Demo" and (hotels or foods or tours):
             try:
                 return self._timeline_gemini(hotels, foods, tours, duration)
@@ -202,6 +212,35 @@ class ANITA:
             timeline.append({"day": day, "label": "Arrival Day" if day == 1 else ("Departure Day" if day == duration else ""), "schedule": schedule})
         return timeline
 
+    def _build_guide(self, results):
+        """
+        Traveler Guide: visa requirements, SIM/currency info, and a rollup of
+        the YouTube-vlog highlights already gathered by the other agents.
+        Each source is independently resilient — a RAG/Pinecone failure (e.g.
+        no data indexed yet for this destination) never breaks the guide,
+        it just yields an empty section.
+        """
+        destination = self.state_manager.state.get("destination", "")
+
+        try:
+            visa_results = visa_rag.query_requirements(destination, mode=self.mode)
+            visa_info = visa_rag.summarize_results(visa_results, mode=self.mode)
+        except Exception as e:
+            print(f"⚠️ Visa RAG error: {e!r}")
+            visa_info = []
+
+        sim_currency_info = results.get("transport", {}).get("utility_insights", [])
+
+        video_highlights = []
+        for key in ("hotel", "food", "transport", "flight", "weather"):
+            video_highlights.extend(results.get(key, {}).get("vlog_insights", []))
+
+        return {
+            "visa": visa_info,
+            "sim_currency": sim_currency_info,
+            "video_highlights": video_highlights,
+        }
+
     def orchestrate(self, traveler_type="general", preferences=None):
         def _run():
             results = {}
@@ -238,6 +277,9 @@ class ANITA:
 
             # Step 3.5: Build a day-by-day timeline from the real options above
             results["timeline"] = self._build_timeline(results)
+
+            # Step 3.6: Build the traveler Guide (Visa, SIM/currency, video highlights)
+            results["guide"] = self._build_guide(results)
 
             # Step 4: Apply alternates into state
             if self.routes:

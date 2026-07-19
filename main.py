@@ -43,66 +43,109 @@ def suggestion_card(icon, title, price, rating, popularity, distance=None, durat
     {f"🍴 Cuisine: {cuisine}" if cuisine else ""}
     """)
 
+# ---------------- Helper: selection checkbox (add/remove from itinerary) ----------------
+def selection_checkbox(key, label="Include in my itinerary"):
+    col_check, col_card = st.columns([1, 11])
+    with col_check:
+        included = st.checkbox("", value=True, key=key, label_visibility="collapsed")
+    return included, col_card
+
 # ---------------- Helper: Interactive Cards (click to reveal traveler-DNA details) ----------------
-def hotel_card(h):
-    if "raw_output" in h or "error" in h:
-        suggestion_card("🏨", h.get("name", "Unknown"), h.get("price", "N/A"), h.get("rating", "N/A"), h.get("popularity", ""))
-        return
-    with st.expander(f"🏨 {h.get('name', 'Unknown')} — {h.get('price', 'N/A')} · ⭐ {h.get('rating', 'N/A')}"):
-        if h.get("highlights"):
-            st.write(f"✨ {h['highlights']}")
-        room_bits = [b for b in [h.get("room_type"), h.get("bed_size"), h.get("style")] if b]
-        if room_bits:
-            st.write(f"🛏️ **Room:** {' · '.join(room_bits)}")
-        if h.get("amenities"):
-            st.write(f"🧳 **Amenities:** {', '.join(h['amenities'])}")
-        if h.get("review_summary"):
-            st.write(f"📝 **Guest reviews:** {h['review_summary']}")
-        if h.get("distances"):
-            st.write("📍 **Distance to key spots:**")
-            for d in h["distances"]:
-                st.write(f"- {d.get('landmark', '')}: {d.get('distance', '')}")
-        if h.get("fit"):
-            st.info(f"✅ **Why this fits you:** {h['fit']}")
+def hotel_card(h, idx):
+    name = h.get("name", "Unknown")
+    key = f"sel_hotel_{idx}_{name}"
+    included, col_card = selection_checkbox(key)
+    with col_card:
+        if "raw_output" in h or "error" in h:
+            suggestion_card("🏨", name, h.get("price", "N/A"), h.get("rating", "N/A"), h.get("popularity", ""))
+            return
+        with st.expander(f"🏨 {name} — {h.get('price', 'N/A')} · ⭐ {h.get('rating', 'N/A')}{'' if included else ' (excluded)'}"):
+            if h.get("highlights"):
+                st.write(f"✨ {h['highlights']}")
+            room_bits = [b for b in [h.get("room_type"), h.get("bed_size"), h.get("style")] if b]
+            if room_bits:
+                st.write(f"🛏️ **Room:** {' · '.join(room_bits)}")
+            if h.get("amenities"):
+                st.write(f"🧳 **Amenities:** {', '.join(h['amenities'])}")
+            if h.get("review_summary"):
+                st.write(f"📝 **Guest reviews:** {h['review_summary']}")
+            if h.get("distances"):
+                st.write("📍 **Distance to key spots:**")
+                for d in h["distances"]:
+                    st.write(f"- {d.get('landmark', '')}: {d.get('distance', '')}")
+            if h.get("fit"):
+                st.info(f"✅ **Why this fits you:** {h['fit']}")
 
-def food_card(f, cuisine_filter):
-    if "raw_output" in f or "error" in f:
-        suggestion_card("🍽️", f.get("name", "Restaurant"), f.get("price", "N/A"), f.get("rating", "N/A"),
-                         f.get("popularity", ""), distance=f.get("distance"), duration=f.get("duration"), cuisine=cuisine_filter)
-        return
-    with st.expander(f"🍽️ {f.get('name', 'Restaurant')} — {f.get('price', 'N/A')} · ⭐ {f.get('rating', 'N/A')}"):
-        if f.get("cuisine"):
-            st.write(f"🍴 **Cuisine:** {f['cuisine']}")
-        if f.get("distance") and f.get("duration"):
-            st.write(f"🚶 **Distance:** {f['distance']} | ⏱️ {f['duration']}")
-        if f.get("specialties"):
-            st.write(f"⭐ **Must-try:** {', '.join(f['specialties'])}")
-        if f.get("ambiance"):
-            st.write(f"🎭 **Ambiance:** {f['ambiance']}")
-        if f.get("dietary_options"):
-            st.write(f"🥗 **Dietary options:** {', '.join(f['dietary_options'])}")
-        if f.get("review_summary"):
-            st.write(f"📝 **Diner reviews:** {f['review_summary']}")
-        if f.get("fit"):
-            st.info(f"✅ **Why this fits you:** {f['fit']}")
+def food_card(f, cuisine_filter, idx):
+    name = f.get("name", "Restaurant")
+    key = f"sel_food_{idx}_{name}"
+    included, col_card = selection_checkbox(key)
+    with col_card:
+        if "raw_output" in f or "error" in f:
+            suggestion_card("🍽️", name, f.get("price", "N/A"), f.get("rating", "N/A"),
+                             f.get("popularity", ""), distance=f.get("distance"), duration=f.get("duration"), cuisine=cuisine_filter)
+            return
+        with st.expander(f"🍽️ {name} — {f.get('price', 'N/A')} · ⭐ {f.get('rating', 'N/A')}{'' if included else ' (excluded)'}"):
+            if f.get("cuisine"):
+                st.write(f"🍴 **Cuisine:** {f['cuisine']}")
+            if f.get("distance") and f.get("duration"):
+                st.write(f"🚶 **Distance:** {f['distance']} | ⏱️ {f['duration']}")
+            if f.get("specialties"):
+                st.write(f"⭐ **Must-try:** {', '.join(f['specialties'])}")
+            if f.get("ambiance"):
+                st.write(f"🎭 **Ambiance:** {f['ambiance']}")
+            if f.get("dietary_options"):
+                st.write(f"🥗 **Dietary options:** {', '.join(f['dietary_options'])}")
+            if f.get("review_summary"):
+                st.write(f"📝 **Diner reviews:** {f['review_summary']}")
+            if f.get("fit"):
+                st.info(f"✅ **Why this fits you:** {f['fit']}")
 
-def tour_card(t):
-    if "raw_output" in t or "error" in t or "description" in t:
-        suggestion_card("🎯", t.get("title", "Activity"), t.get("price", "N/A"), t.get("rating", "N/A"), t.get("popularity", "🔥 Popular"))
-        return
-    with st.expander(f"🎯 {t.get('title', 'Activity')} — {t.get('price', 'N/A')} · ⭐ {t.get('rating', 'N/A')}"):
-        if t.get("what_to_expect"):
-            st.write(f"📖 **What to expect:** {t['what_to_expect']}")
-        if t.get("duration"):
-            st.write(f"⏱️ **Duration:** {t['duration']}")
-        if t.get("best_time"):
-            st.write(f"🕒 **Best time to go:** {t['best_time']}")
-        if t.get("accessibility_notes"):
-            st.write(f"♿ **Accessibility:** {t['accessibility_notes']}")
-        if t.get("tips"):
-            st.write(f"💡 **Tip:** {t['tips']}")
-        if t.get("fit"):
-            st.info(f"✅ **Why this fits you:** {t['fit']}")
+def tour_card(t, idx):
+    title = t.get("title", "Activity")
+    key = f"sel_tour_{idx}_{title}"
+    included, col_card = selection_checkbox(key)
+    with col_card:
+        if "raw_output" in t or "error" in t or "description" in t:
+            suggestion_card("🎯", title, t.get("price", "N/A"), t.get("rating", "N/A"), t.get("popularity", "🔥 Popular"))
+            return
+        with st.expander(f"🎯 {title} — {t.get('price', 'N/A')} · ⭐ {t.get('rating', 'N/A')}{'' if included else ' (excluded)'}"):
+            if t.get("what_to_expect"):
+                st.write(f"📖 **What to expect:** {t['what_to_expect']}")
+            if t.get("duration"):
+                st.write(f"⏱️ **Duration:** {t['duration']}")
+            if t.get("best_time"):
+                st.write(f"🕒 **Best time to go:** {t['best_time']}")
+            if t.get("accessibility_notes"):
+                st.write(f"♿ **Accessibility:** {t['accessibility_notes']}")
+            if t.get("tips"):
+                st.write(f"💡 **Tip:** {t['tips']}")
+            if t.get("fit"):
+                st.info(f"✅ **Why this fits you:** {t['fit']}")
+
+def flight_card(f, leg, idx):
+    airline = f.get("airline", "Unknown")
+    key = f"sel_flight_{leg}_{idx}_{airline}"
+    included, col_card = selection_checkbox(key)
+    with col_card:
+        if "raw_output" in f or "error" in f:
+            suggestion_card("✈️", airline, f.get("price_range", "N/A"), f.get("rating", "N/A"), f.get("route", ""))
+            return
+        with st.expander(f"✈️ {airline} — {f.get('price_range', 'N/A')} · ⭐ {f.get('rating', 'N/A')}{'' if included else ' (excluded)'}"):
+            if f.get("route"):
+                st.write(f"🛫 **Route:** {f['route']}")
+            if f.get("departure") or f.get("arrival"):
+                st.write(f"🕐 **Departure:** {f.get('departure', 'N/A')} → **Arrival:** {f.get('arrival', 'N/A')}")
+            if f.get("duration"):
+                st.write(f"⏱️ **Duration:** {f['duration']}")
+            if f.get("class_options"):
+                st.write(f"💺 **Class options:** {', '.join(f['class_options'])}")
+            if f.get("baggage_allowance"):
+                st.write(f"🧳 **Baggage:** {f['baggage_allowance']}")
+            if f.get("url"):
+                st.write(f"🔗 [View on Google Flights]({f['url']})")
+            if f.get("fit"):
+                st.info(f"✅ **Why this fits you:** {f['fit']}")
 
 # ---------------- Session state: conversation + ANITA instance ----------------
 if "anita" not in st.session_state or st.session_state.get("mode") != mode:
@@ -151,8 +194,8 @@ results = st.session_state.results
 if results is None:
     st.info("Chat with Anita above to plan your trip — once she has your origin, destination, and dates, your itinerary will appear here.")
 else:
-    tab_itinerary, tab_flights, tab_hotels, tab_transport, tab_activities, tab_culinary, tab_disruptions, tab_alerts = st.tabs(
-        ["Itinerary", "Flights", "Hotels", "Transport", "Activities", "Culinary", "Disruptions", "Proactive Alerts"]
+    tab_itinerary, tab_flights, tab_hotels, tab_transport, tab_activities, tab_culinary, tab_guide, tab_disruptions, tab_alerts = st.tabs(
+        ["Itinerary", "Flights", "Hotels", "Transport", "Activities", "Culinary", "Guide", "Disruptions", "Proactive Alerts"]
     )
 
     # ---------------- ITINERARY TAB ----------------
@@ -186,6 +229,30 @@ else:
         col9.metric("Reuse Rate", f"{prompt_stats['reuse_percent']}%")
 
         st.subheader("📅 Day-by-Day Timeline")
+        st.caption("Add/remove hotels, restaurants, and activities in their tabs below, then click Update to re-sequence your timeline.")
+        if st.button("🔄 Update Itinerary with My Selections"):
+            all_hotels = results.get("hotel", {}).get("hotels", [])
+            all_foods = results.get("food", {}).get("restaurants", [])
+            all_tours = results.get("tour", {}).get("tour_summary", {}).get("tours", [])
+
+            selected_hotels = [
+                h.get("name") for i, h in enumerate(all_hotels)
+                if h.get("name") and st.session_state.get(f"sel_hotel_{i}_{h.get('name')}", True)
+            ]
+            selected_foods = [
+                f.get("name") for i, f in enumerate(all_foods)
+                if f.get("name") and st.session_state.get(f"sel_food_{i}_{f.get('name')}", True)
+            ]
+            selected_tours = [
+                t.get("title") for i, t in enumerate(all_tours)
+                if t.get("title") and st.session_state.get(f"sel_tour_{i}_{t.get('title')}", True)
+            ]
+
+            with st.spinner("Re-sequencing your itinerary..."):
+                results["timeline"] = anita.rebuild_timeline_from_selection(selected_hotels, selected_foods, selected_tours)
+            st.session_state.results = results
+            st.rerun()
+
         timeline = results.get("timeline", [])
         if timeline:
             for day in timeline:
@@ -206,12 +273,25 @@ else:
     # ---------------- FLIGHTS TAB ----------------
     with tab_flights:
         st.header("Flights")
-        flights = results.get("flight", {}).get("flights", [])
-        if flights:
-            for f in flights:
-                suggestion_card("✈️", f.get("airline", "Unknown"), f.get("price_range", "N/A"),
-                                f.get("reviews", {}).get("rating", "N/A"),
-                                f.get("constraint_applied", ""))
+        st.caption("Uncheck an option to exclude it, then click Update Itinerary on the Itinerary tab.")
+        flights = results.get("flight", {}).get("flights", {})
+        outbound = flights.get("outbound", []) if isinstance(flights, dict) else []
+        returning = flights.get("return", []) if isinstance(flights, dict) else []
+
+        st.subheader(f"🛫 Outbound: {trip.get('origin')} → {trip.get('destination')}")
+        if outbound:
+            for i, f in enumerate(outbound):
+                flight_card(f, "out", i)
+        else:
+            st.info("No outbound flight options available.")
+
+        st.subheader(f"🛬 Return: {trip.get('destination')} → {trip.get('origin')}")
+        if returning:
+            for i, f in enumerate(returning):
+                flight_card(f, "ret", i)
+        else:
+            st.info("No return flight options available.")
+
         show_map(trip.get("origin"), trip.get("destination"))
 
     # ---------------- HOTELS TAB ----------------
@@ -220,8 +300,8 @@ else:
         st.caption("Click a hotel to see room details, amenities, distances, and why it fits you.")
         hotels = results.get("hotel", {}).get("hotels", [])
         if hotels:
-            for h in hotels:
-                hotel_card(h)
+            for i, h in enumerate(hotels):
+                hotel_card(h, i)
         hotel_vlogs = results.get("hotel", {}).get("vlog_insights", [])
         if hotel_vlogs:
             st.caption("📺 What travelers say (from YouTube)")
@@ -246,8 +326,8 @@ else:
         st.caption("Click an activity to see what to expect, timing tips, and why it fits you.")
         tours = results.get("tour", {}).get("tour_summary", {}).get("tours", [])
         if tours:
-            for t in tours:
-                tour_card(t)
+            for i, t in enumerate(tours):
+                tour_card(t, i)
         if tours:
             show_map(tours[0].get("location", trip.get("destination")), tours[-1].get("location", trip.get("destination")))
 
@@ -258,14 +338,43 @@ else:
         cuisine_filter = st.selectbox("Cuisine Preference", ["Any", "Vegetarian", "Vegan", "Street Food", "Fine Dining"])
         foods = results.get("food", {}).get("restaurants", [])
         if foods:
-            for f in foods:
-                food_card(f, cuisine_filter)
+            for i, f in enumerate(foods):
+                food_card(f, cuisine_filter, i)
         food_vlogs = results.get("food", {}).get("vlog_insights", [])
         if food_vlogs:
             st.caption("📺 What travelers say (from YouTube)")
             for v in food_vlogs:
                 st.write(f"- {v}")
         show_map(trip.get("destination"), foods[0].get("name", trip.get("destination")) if foods else trip.get("destination"))
+
+    # ---------------- GUIDE TAB ----------------
+    with tab_guide:
+        st.header("Traveler Guide")
+        guide = results.get("guide", {})
+
+        st.subheader("🛂 Visa")
+        visa_info = guide.get("visa", [])
+        if visa_info:
+            for v in visa_info:
+                st.write(f"- {v}")
+        else:
+            st.info("No visa information available yet for this destination.")
+
+        st.subheader("📱 SIM & Currency")
+        sim_info = guide.get("sim_currency", [])
+        if sim_info:
+            for s in sim_info:
+                st.write(f"- {s}")
+        else:
+            st.info("No SIM/currency information available yet for this destination.")
+
+        st.subheader("📺 Video Highlights")
+        video_highlights = guide.get("video_highlights", [])
+        if video_highlights:
+            for v in video_highlights:
+                st.write(f"- {v}")
+        else:
+            st.info("No video highlights available yet for this destination.")
 
     # ---------------- DISRUPTIONS TAB ----------------
     with tab_disruptions:

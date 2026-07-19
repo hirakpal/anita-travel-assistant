@@ -380,6 +380,43 @@ def parse_flights_output(text: str) -> list[dict]:
         return [{"raw_output": text, "error": str(e)}]
 
 
+def _parse_flight_leg(items):
+    parsed = []
+    for f in items:
+        if not isinstance(f, dict):
+            continue
+        parsed.append({
+            "airline": f.get("airline", "Unknown"),
+            "route": f.get("route", ""),
+            "departure": f.get("departure", ""),
+            "arrival": f.get("arrival", ""),
+            "duration": f.get("duration", ""),
+            "class_options": f.get("class_options", []),
+            "baggage_allowance": f.get("baggage_allowance", ""),
+            "price_range": f.get("price", f.get("price_range", "")),
+            "rating": f.get("rating", "N/A"),
+            "fit": f.get("fit", ""),
+        })
+    return parsed
+
+
+def parse_roundtrip_flights_output(text: str) -> dict:
+    """
+    Parse flight_agent's Gemini response (asked to return strict JSON per
+    FLIGHT_PROMPT) into {"outbound": [...], "return": [...]}. Falls back to
+    the raw text under "outbound" if Gemini didn't return JSON.
+    """
+    outbound = _extract_json_list(text, wrapper_keys=["outbound_flights"])
+    if outbound is None:
+        return {"outbound": [{"raw_output": text}], "return": []}
+
+    return_leg = _extract_json_list(text, wrapper_keys=["return_flights"]) or []
+    return {
+        "outbound": _parse_flight_leg(outbound) or [{"raw_output": text}],
+        "return": _parse_flight_leg(return_leg),
+    }
+
+
 def parse_tours_output(raw_text: str) -> List[dict]:
     """
     Parse tour_agent's Gemini response (asked to return strict JSON per

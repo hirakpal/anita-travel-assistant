@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List, Optional, Union
+from typing import Any, List, Optional, Union
 
 class Review(BaseModel):
     rating: Optional[float] = None
@@ -49,14 +49,14 @@ class Event(BaseModel):
     location: Optional[str] = None
     description: Optional[str] = None
     price_range: Optional[str] = None
-    reviews: Optional[Union[str, List[str]]] = None
+    reviews: Optional[Any] = None
 
 class Location(BaseModel):
     name: str
     type: Optional[str] = None  # Landmark, Museum, Park
     opening_hours: Optional[str] = None
     price_range: Optional[str] = None
-    reviews: Optional[Union[str, List[str]]] = None
+    reviews: Optional[Any] = None
 
 class News(BaseModel):
     headline: str
