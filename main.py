@@ -2,6 +2,8 @@ import sys
 import streamlit as st
 from orchestrator.anita import ANITA
 from utils.cache import get_cache_stats
+from utils.semantic_cache import get_semantic_cache_stats
+from utils.prompt_cache import get_prompt_cache_stats
 
 # Avoid UnicodeEncodeError when agents print emoji on Windows consoles (cp1252)
 if hasattr(sys.stdout, "reconfigure"):
@@ -63,11 +65,28 @@ with tab_itinerary:
     st.header("Itinerary Overview")
     st.write(f"Mode: {mode}")
 
-    cache_stats = get_cache_stats()
+    st.subheader("Caching & Token Savings")
+
+    st.caption("Fragment cache — per tool-call (Gemini/API) caching")
+    fragment_stats = get_cache_stats()
     col1, col2, col3 = st.columns(3)
-    col1.metric("Cache Hits", cache_stats["hits"])
-    col2.metric("Cache Misses", cache_stats["misses"])
-    col3.metric("Token Savings", f"{cache_stats['savings_percent']}%")
+    col1.metric("Cache Hits", fragment_stats["hits"])
+    col2.metric("Cache Misses", fragment_stats["misses"])
+    col3.metric("Token Savings", f"{fragment_stats['savings_percent']}%")
+
+    st.caption("Semantic cache — whole-request dedup at the orchestrator level")
+    semantic_stats = get_semantic_cache_stats()
+    col4, col5, col6 = st.columns(3)
+    col4.metric("Semantic Hits", semantic_stats["hits"])
+    col5.metric("Semantic Misses", semantic_stats["misses"])
+    col6.metric("Pipeline Runs Saved", f"{semantic_stats['savings_percent']}%")
+
+    st.caption("Prompt cache — static system-prompt handle reuse")
+    prompt_stats = get_prompt_cache_stats()
+    col7, col8, col9 = st.columns(3)
+    col7.metric("Handle Reuses", prompt_stats["handle_reuses"])
+    col8.metric("Handles Created", prompt_stats["handles_created"])
+    col9.metric("Reuse Rate", f"{prompt_stats['reuse_percent']}%")
 
     show_map(initial_state["origin"], initial_state["destination"])
 
