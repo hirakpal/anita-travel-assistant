@@ -142,21 +142,42 @@ button[kind="primary"]:hover, [data-testid="baseButton-primary"]:hover {
   font-weight: 600;
 }
 
-/* Tabs — marigold underline */
+/* Tabs — segmented pill-slider toggle, not an underlined tab strip */
 [data-testid="stTabs"] [data-baseweb="tab-list"] {
-  border-bottom: 1px solid var(--gt-line);
-  gap: 4px;
+  border-bottom: none;
+  background: var(--gt-panel);
+  border: 1px solid var(--gt-line);
+  border-radius: 999px;
+  padding: 5px;
+  gap: 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
+[data-testid="stTabs"] [data-baseweb="tab-list"]::-webkit-scrollbar { display: none; }
+[data-testid="stTabs"] [data-baseweb="tab-highlight"] { display: none; }
 [data-testid="stTabs"] button {
   font-family: -apple-system, "Segoe UI", Arial, sans-serif !important;
   font-weight: 700 !important;
-  font-size: 13px;
+  font-size: 12.5px;
   color: var(--gt-muted) !important;
+  background: transparent;
+  border-radius: 999px !important;
+  padding: 8px 18px !important;
+  margin: 0 !important;
+  white-space: nowrap;
+  transition: background .2s ease, color .2s ease, transform .15s ease;
+}
+[data-testid="stTabs"] button:hover {
+  color: var(--gt-ink) !important;
+  background: rgba(255,167,38,.12);
 }
 [data-testid="stTabs"] button[aria-selected="true"] {
-  color: var(--gt-accent) !important;
-  border-bottom: 3px solid var(--gt-accent) !important;
+  color: #241000 !important;
+  background: linear-gradient(120deg, var(--gt-accent), var(--gt-sandstone)) !important;
+  box-shadow: 0 2px 10px rgba(255,167,38,.35);
+  transform: translateY(-1px);
 }
+[data-testid="stTabs"] button[aria-selected="true"]:hover { background: linear-gradient(120deg, var(--gt-accent), var(--gt-sandstone)) !important; }
 
 /* Chat — pill bubbles */
 [data-testid="stChatMessage"] {
